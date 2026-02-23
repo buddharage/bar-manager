@@ -61,10 +61,7 @@ function SettingsContent() {
   async function triggerSync() {
     setSyncing(true);
     try {
-      const res = await fetch("/api/sync/toast", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${window.prompt("Enter CRON_SECRET:")}` },
-      });
+      const res = await fetch("/api/sync/toast", { method: "POST" });
       const data = await res.json();
       if (data.error) {
         alert(`Sync failed: ${data.error}`);
@@ -80,18 +77,11 @@ function SettingsContent() {
 
   async function triggerGoogleSync() {
     setSyncingGoogle(true);
-    const secret = window.prompt("Enter CRON_SECRET:");
-    if (!secret) {
-      setSyncingGoogle(false);
-      return;
-    }
 
     try {
-      const headers = { Authorization: `Bearer ${secret}` };
-
       const [driveRes, gmailRes] = await Promise.all([
-        fetch("/api/sync/google", { method: "POST", headers }),
-        fetch("/api/sync/gmail", { method: "POST", headers }),
+        fetch("/api/sync/google", { method: "POST" }),
+        fetch("/api/sync/gmail", { method: "POST" }),
       ]);
 
       const driveData = await driveRes.json();

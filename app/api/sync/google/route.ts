@@ -6,13 +6,13 @@ import {
   exportFileContent,
 } from "@/lib/integrations/google-client";
 import { createHash } from "crypto";
+import { verifyRequest } from "@/lib/auth/session";
 
 const TARGET_FOLDERS = ["Finances", "Operations"];
 
 // POST /api/sync/google — sync Google Drive files from target folders
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!verifyRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

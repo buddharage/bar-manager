@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { searchMessages, getMessageContent } from "@/lib/integrations/google-client";
+import { verifyRequest } from "@/lib/auth/session";
 
 const GMAIL_SEARCH_QUERY =
   'subject:(receipt OR invoice OR "order confirmation" OR "order status") newer_than:30d';
 
 // POST /api/sync/gmail — sync Gmail receipts, invoices, and order emails
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!verifyRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

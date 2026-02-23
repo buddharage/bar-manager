@@ -20,7 +20,7 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the dashboard.
+Open [http://localhost:3000](http://localhost:3000) — you'll be prompted to log in with the `DASHBOARD_PASSWORD` you set in `.env.local`.
 
 ### 1. Set up Supabase
 
@@ -93,7 +93,7 @@ Connects Google Drive and Gmail so the AI assistant can search bar documents, re
 1. Push to GitHub and import the repo in [Vercel](https://vercel.com)
 2. Add all `.env.local` variables as Vercel environment variables
 3. Update `GOOGLE_REDIRECT_URI` to your production callback URL
-4. Generate a random `CRON_SECRET` and add it to both Vercel env vars and GitHub repo secrets
+4. Generate a random `CRON_SECRET` and `DASHBOARD_PASSWORD` and add both to Vercel env vars. Add `CRON_SECRET` to GitHub repo secrets too
 
 ### 6. Enable GitHub Actions cron
 
@@ -112,7 +112,7 @@ The cron schedule:
 | Gmail sync | Every 6 hours | `/api/sync/gmail` |
 | Toast sync | Daily at 6 AM ET | `/api/sync/toast` |
 
-You can also trigger all syncs manually from the GitHub Actions tab or from the **Settings** page in the app.
+You can also trigger all syncs manually from the GitHub Actions tab or from the **Settings** page in the app (no secret prompt needed — uses your login session).
 
 ### 7. Set inventory par levels
 
@@ -132,6 +132,7 @@ After the first Toast sync populates your inventory, set `par_level` for items y
 
 ```
 app/
+  login/                  Password login page
   dashboard/              Sales KPIs + active alerts overview
   inventory/              Inventory list with stock status
   inventory/alerts/       Low-stock alerts + AI reorder suggestions
@@ -142,6 +143,7 @@ app/
   schedule/               AI scheduling (Phase 3)
   payroll/                Payroll dashboard (Phase 3)
   api/
+    auth/session/         Login/logout (password → signed cookie)
     auth/google/          Google OAuth2 flow (consent + callback)
     sync/toast/           Daily Toast sync endpoint
     sync/google/          Google Drive sync endpoint
@@ -151,6 +153,7 @@ app/
     ai/reorder/           AI reorder suggestions endpoint
 
 lib/
+  auth/                   Session token (HMAC-SHA256) + request verification
   integrations/           Toast, Google, QBO, Sling API clients
   ai/                     Gemini Flash agent with tool-calling
   tax/                    NYC sales tax calculator
