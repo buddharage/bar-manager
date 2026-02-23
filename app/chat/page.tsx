@@ -75,6 +75,8 @@ export default function ChatPage() {
                 <p>&quot;What are our top 5 cocktails this month?&quot;</p>
                 <p>&quot;When should I reorder Tito&apos;s?&quot;</p>
                 <p>&quot;Show me items below par level&quot;</p>
+                <p>&quot;What was our last Sysco invoice?&quot;</p>
+                <p>&quot;What&apos;s in the Operations folder?&quot;</p>
               </div>
             </div>
           </div>

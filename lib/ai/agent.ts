@@ -13,6 +13,8 @@ const model = genAI.getGenerativeModel({
   systemInstruction: `You are an AI assistant for a 50-seat cocktail bar in Brooklyn, NY.
 You help with inventory management, sales analysis, scheduling, and general bar operations.
 You have access to tools to query the bar's database. Use them to answer questions with real data.
+You can also search documents from Google Drive (Finances and Operations folders) and emails from Gmail
+(receipts, invoices, order confirmations). Use search_documents for Drive files and search_emails for Gmail messages.
 Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.`,
 });
 
@@ -93,6 +95,64 @@ const tools: Tool[] = [
               description: "Filter by alert type (low_stock, out_of_stock, or overstock)",
             },
           },
+        },
+      },
+      {
+        name: "search_documents",
+        description:
+          "Search synced Google Drive documents (from Finances and Operations folders) and Gmail messages using full-text search.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            query: {
+              type: SchemaType.STRING,
+              description: "Search query (e.g., 'Sysco invoice', 'liquor license', 'P&L 2024')",
+            },
+            source: {
+              type: SchemaType.STRING,
+              description: "Filter by source: 'google_drive' or 'gmail'. Omit to search both.",
+            },
+            folder: {
+              type: SchemaType.STRING,
+              description: "Filter Google Drive results by folder name (e.g., 'Finances', 'Operations')",
+            },
+            limit: {
+              type: SchemaType.INTEGER,
+              description: "Max number of results to return (default 10)",
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "search_emails",
+        description:
+          "Search synced Gmail messages with email-specific filters (from, date range).",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            query: {
+              type: SchemaType.STRING,
+              description: "Search query for email subject and body",
+            },
+            from_email: {
+              type: SchemaType.STRING,
+              description: "Filter by sender email or name",
+            },
+            date_from: {
+              type: SchemaType.STRING,
+              description: "Filter emails from this date (YYYY-MM-DD)",
+            },
+            date_to: {
+              type: SchemaType.STRING,
+              description: "Filter emails up to this date (YYYY-MM-DD)",
+            },
+            limit: {
+              type: SchemaType.INTEGER,
+              description: "Max number of results to return (default 10)",
+            },
+          },
+          required: ["query"],
         },
       },
     ],
@@ -186,6 +246,72 @@ async function executeTool(
       const { data, error } = await query;
       if (error) throw error;
       return data;
+    }
+
+    case "search_documents": {
+      const limit = (args.limit as number) || 10;
+      const tsQuery = (args.query as string)
+        .split(/\s+/)
+        .filter(Boolean)
+        .join(" & ");
+
+      let query = supabase
+        .from("documents")
+        .select("id, source, title, content, metadata")
+        .textSearch("content_tsv", tsQuery)
+        .limit(limit);
+
+      if (args.source) {
+        query = query.eq("source", args.source);
+      }
+      if (args.folder) {
+        query = query.eq("metadata->>folder", args.folder);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return (data || []).map((doc) => ({
+        title: doc.title,
+        source: doc.source,
+        metadata: doc.metadata,
+        content: doc.content?.slice(0, 8000) || "",
+      }));
+    }
+
+    case "search_emails": {
+      const limit = (args.limit as number) || 10;
+      const tsQuery = (args.query as string)
+        .split(/\s+/)
+        .filter(Boolean)
+        .join(" & ");
+
+      let query = supabase
+        .from("documents")
+        .select("id, title, content, metadata")
+        .eq("source", "gmail")
+        .textSearch("content_tsv", tsQuery)
+        .limit(limit);
+
+      if (args.from_email) {
+        query = query.ilike("metadata->>from", `%${args.from_email}%`);
+      }
+      if (args.date_from) {
+        query = query.gte("metadata->>date", args.date_from);
+      }
+      if (args.date_to) {
+        query = query.lte("metadata->>date", args.date_to);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return (data || []).map((doc) => ({
+        subject: doc.title,
+        from: (doc.metadata as Record<string, unknown>)?.from || "",
+        date: (doc.metadata as Record<string, unknown>)?.date || "",
+        body: doc.content?.slice(0, 6000) || "",
+      }));
     }
 
     default:

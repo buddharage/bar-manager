@@ -1,14 +1,49 @@
-name: Daily Toast Sync
+name: Daily Sync
 
 on:
   schedule:
-    # Run daily at 6 AM ET (11:00 UTC)
+    # Google Drive: daily at 3 AM ET (8:00 UTC) — before Toast sync
+    # Gmail: every 6 hours (receipts are time-sensitive)
+    # Toast: daily at 6 AM ET (11:00 UTC)
+    - cron: "0 8 * * *"
+    - cron: "0 */6 * * *"
     - cron: "0 11 * * *"
   workflow_dispatch: # Allow manual trigger
 
 jobs:
-  sync:
+  google-drive-sync:
     runs-on: ubuntu-latest
+    if: github.event.schedule == '0 8 * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Trigger Google Drive sync
+        run: |
+          curl -X POST "${{ secrets.APP_URL }}/api/sync/google" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body \
+            --max-time 300
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+  gmail-sync:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Trigger Gmail sync
+        run: |
+          curl -X POST "${{ secrets.APP_URL }}/api/sync/gmail" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body \
+            --max-time 300
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+  toast-sync:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 11 * * *' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Trigger Toast sync
         run: |

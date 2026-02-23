@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,13 +18,35 @@ interface SyncLogEntry {
   completed_at: string | null;
 }
 
-export default function SettingsPage() {
+function SettingsContent() {
   const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [syncingGoogle, setSyncingGoogle] = useState(false);
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     loadSyncLogs();
+    checkGoogleConnection();
   }, []);
+
+  // Show connection result from OAuth callback
+  useEffect(() => {
+    const googleStatus = searchParams.get("google");
+    if (googleStatus === "connected") {
+      setGoogleConnected(true);
+    }
+  }, [searchParams]);
+
+  async function checkGoogleConnection() {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("settings")
+      .select("key")
+      .eq("key", "google_tokens")
+      .single();
+    setGoogleConnected(!!data);
+  }
 
   async function loadSyncLogs() {
     const supabase = createClient();
@@ -53,6 +76,46 @@ export default function SettingsPage() {
       alert(`Sync error: ${err}`);
     }
     setSyncing(false);
+  }
+
+  async function triggerGoogleSync() {
+    setSyncingGoogle(true);
+    const secret = window.prompt("Enter CRON_SECRET:");
+    if (!secret) {
+      setSyncingGoogle(false);
+      return;
+    }
+
+    try {
+      const headers = { Authorization: `Bearer ${secret}` };
+
+      const [driveRes, gmailRes] = await Promise.all([
+        fetch("/api/sync/google", { method: "POST", headers }),
+        fetch("/api/sync/gmail", { method: "POST", headers }),
+      ]);
+
+      const driveData = await driveRes.json();
+      const gmailData = await gmailRes.json();
+
+      const results = [];
+      if (driveData.error) results.push(`Drive: ${driveData.error}`);
+      else results.push(`Drive: ${driveData.records_synced} files synced`);
+      if (gmailData.error) results.push(`Gmail: ${gmailData.error}`);
+      else results.push(`Gmail: ${gmailData.records_synced} emails synced`);
+
+      alert(results.join("\n"));
+      loadSyncLogs();
+    } catch (err) {
+      alert(`Google sync error: ${err}`);
+    }
+    setSyncingGoogle(false);
+  }
+
+  async function disconnectGoogle() {
+    if (!window.confirm("Disconnect Google account? Synced documents will be preserved.")) return;
+    const supabase = createClient();
+    await supabase.from("settings").delete().eq("key", "google_tokens");
+    setGoogleConnected(false);
   }
 
   return (
@@ -106,6 +169,40 @@ export default function SettingsPage() {
             </div>
             <Badge variant="default">Configured</Badge>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Google Workspace */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Google Workspace</CardTitle>
+            {googleConnected ? (
+              <Badge variant="default">Connected</Badge>
+            ) : (
+              <Badge variant="secondary">Not connected</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Connect your Google account to sync documents from Drive (Finances &amp; Operations folders)
+            and receipts/invoices from Gmail. The AI assistant can then search these when answering questions.
+          </p>
+          {googleConnected ? (
+            <div className="flex gap-2">
+              <Button onClick={triggerGoogleSync} disabled={syncingGoogle}>
+                {syncingGoogle ? "Syncing..." : "Sync Now"}
+              </Button>
+              <Button variant="outline" onClick={disconnectGoogle}>
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <Button asChild>
+              <a href="/api/auth/google">Connect Google</a>
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -171,5 +268,13 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsContent />
+    </Suspense>
   );
 }

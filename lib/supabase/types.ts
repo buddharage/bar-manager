@@ -96,6 +96,20 @@ export interface Setting {
   updated_at: string;
 }
 
+export interface Document {
+  id: number;
+  source: "google_drive" | "gmail";
+  external_id: string;
+  title: string;
+  mime_type: string | null;
+  content: string | null;
+  metadata: Record<string, unknown>;
+  content_hash: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database table name to type mapping
 export interface Database {
   inventory_items: InventoryItem;
@@ -107,4 +121,5 @@ export interface Database {
   time_entries: TimeEntry;
   sync_logs: SyncLog;
   settings: Setting;
+  documents: Document;
 }
