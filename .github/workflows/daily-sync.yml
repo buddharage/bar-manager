@@ -1,0 +1,22 @@
+name: Daily Toast Sync
+
+on:
+  schedule:
+    # Run daily at 6 AM ET (11:00 UTC)
+    - cron: "0 11 * * *"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Toast sync
+        run: |
+          curl -X POST "${{ secrets.APP_URL }}/api/sync/toast" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body \
+            --max-time 120
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

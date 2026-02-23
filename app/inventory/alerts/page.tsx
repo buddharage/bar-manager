@@ -1,0 +1,145 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import type { InventoryAlert } from "@/lib/supabase/types";
+
+export default function AlertsPage() {
+  const [alerts, setAlerts] = useState<InventoryAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reorderSuggestions, setReorderSuggestions] = useState<string | null>(null);
+  const [generatingSuggestions, setGeneratingSuggestions] = useState(false);
+
+  useEffect(() => {
+    loadAlerts();
+  }, []);
+
+  async function loadAlerts() {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("inventory_alerts")
+      .select("*, inventory_items(name, category, current_stock, par_level, unit)")
+      .eq("resolved", false)
+      .order("created_at", { ascending: false });
+    setAlerts((data as unknown as InventoryAlert[]) || []);
+    setLoading(false);
+  }
+
+  async function resolveAlert(id: number) {
+    const supabase = createClient();
+    await supabase
+      .from("inventory_alerts")
+      .update({ resolved: true, resolved_at: new Date().toISOString() })
+      .eq("id", id);
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  async function generateSuggestions() {
+    setGeneratingSuggestions(true);
+    try {
+      const res = await fetch("/api/ai/reorder", { method: "POST" });
+      const data = await res.json();
+      setReorderSuggestions(data.suggestions);
+    } catch {
+      setReorderSuggestions("Failed to generate suggestions. Check API key configuration.");
+    }
+    setGeneratingSuggestions(false);
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <p className="text-muted-foreground">Loading alerts...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Inventory Alerts</h1>
+        <Button onClick={generateSuggestions} disabled={generatingSuggestions}>
+          {generatingSuggestions ? "Generating..." : "AI Reorder Suggestions"}
+        </Button>
+      </div>
+
+      {/* AI Suggestions */}
+      {reorderSuggestions && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">AI Reorder Suggestions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="whitespace-pre-wrap text-sm">{reorderSuggestions}</div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Alerts List */}
+      {alerts.length === 0 ? (
+        <Card>
+          <CardContent className="py-8">
+            <p className="text-center text-muted-foreground">
+              No active alerts. All inventory levels are healthy.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {alerts.map((alert) => {
+            const item = alert.inventory_items as unknown as {
+              name: string;
+              category: string;
+              current_stock: number;
+              par_level: number;
+              unit: string;
+            } | undefined;
+
+            return (
+              <Card key={alert.id}>
+                <CardContent className="flex items-center justify-between py-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {item?.name || `Item #${alert.item_id}`}
+                      </span>
+                      <Badge
+                        variant={
+                          alert.alert_type === "out_of_stock"
+                            ? "destructive"
+                            : "default"
+                        }
+                      >
+                        {alert.alert_type.replace("_", " ")}
+                      </Badge>
+                      {item?.category && (
+                        <Badge variant="secondary">{item.category}</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{alert.message}</p>
+                    {item && (
+                      <p className="text-xs text-muted-foreground">
+                        Current: {item.current_stock} {item.unit} | Par: {item.par_level}{" "}
+                        {item.unit}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resolveAlert(alert.id)}
+                  >
+                    Resolve
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

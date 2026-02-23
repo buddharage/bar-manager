@@ -1,0 +1,19 @@
+name: Monthly Tax Prep
+
+on:
+  schedule:
+    # Run on the 1st of each month at 9 AM ET (14:00 UTC)
+    - cron: "0 14 1 * *"
+  workflow_dispatch:
+
+jobs:
+  tax-prep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger tax computation
+        run: |
+          echo "Tax computation endpoint will be available in Phase 2"
+          # curl -X POST "${{ secrets.APP_URL }}/api/tax/compute" \
+          #   -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          #   -H "Content-Type: application/json" \
+          #   --fail-with-body
