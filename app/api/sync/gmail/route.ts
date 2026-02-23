@@ -8,7 +8,7 @@ const GMAIL_SEARCH_QUERY =
 
 // POST /api/sync/gmail — sync Gmail receipts, invoices, and order emails
 export async function POST(request: NextRequest) {
-  if (!verifyRequest(request)) {
+  if (!(await verifyRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

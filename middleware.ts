@@ -11,7 +11,7 @@ const PUBLIC_PATHS = [
   "/api/ai/",
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
@@ -29,7 +29,7 @@ export function middleware(request: NextRequest) {
 
   // Check session cookie
   const token = request.cookies.get("session")?.value;
-  if (token && verifyToken(token)) {
+  if (token && (await verifyToken(token))) {
     return NextResponse.next();
   }
 

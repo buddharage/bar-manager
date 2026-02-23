@@ -5,7 +5,7 @@ import { verifyRequest } from "@/lib/auth/session";
 
 // Daily Toast sync — called by GitHub Actions cron or manual trigger
 export async function POST(request: NextRequest) {
-  if (!verifyRequest(request)) {
+  if (!(await verifyRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

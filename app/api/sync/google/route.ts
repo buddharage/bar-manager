@@ -12,7 +12,7 @@ const TARGET_FOLDERS = ["Finances", "Operations"];
 
 // POST /api/sync/google — sync Google Drive files from target folders
 export async function POST(request: NextRequest) {
-  if (!verifyRequest(request)) {
+  if (!(await verifyRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

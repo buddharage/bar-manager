@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest } from "next/server";
 
 const COOKIE_NAME = "session";
@@ -10,32 +9,43 @@ function getSecret(): string {
   return secret;
 }
 
+async function hmacSign(data: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(getSecret()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
+  return Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /** Create a signed session token: `timestamp.signature` */
-export function createToken(): string {
+export async function createToken(): Promise<string> {
   const timestamp = Date.now().toString();
-  const signature = createHmac("sha256", getSecret())
-    .update(timestamp)
-    .digest("hex");
+  const signature = await hmacSign(timestamp);
   return `${timestamp}.${signature}`;
 }
 
 /** Verify a session token is valid and not expired */
-export function verifyToken(token: string): boolean {
+export async function verifyToken(token: string): Promise<boolean> {
   const parts = token.split(".");
   if (parts.length !== 2) return false;
 
   const [timestamp, signature] = parts;
-  const expected = createHmac("sha256", getSecret())
-    .update(timestamp)
-    .digest("hex");
+  const expected = await hmacSign(timestamp);
 
-  // Timing-safe comparison
+  // Constant-time comparison
   if (signature.length !== expected.length) return false;
-  const valid = timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected)
-  );
-  if (!valid) return false;
+  let mismatch = 0;
+  for (let i = 0; i < signature.length; i++) {
+    mismatch |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  if (mismatch !== 0) return false;
 
   // Check expiry (30 days)
   const age = Date.now() - Number(timestamp);
@@ -59,7 +69,7 @@ export function cookieOptions(clear = false) {
  * 1. Bearer CRON_SECRET header (GitHub Actions)
  * 2. Session cookie (dashboard user)
  */
-export function verifyRequest(request: NextRequest): boolean {
+export async function verifyRequest(request: NextRequest): Promise<boolean> {
   // Check Bearer token first (for GitHub Actions cron)
   const authHeader = request.headers.get("authorization");
   if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
@@ -68,7 +78,7 @@ export function verifyRequest(request: NextRequest): boolean {
 
   // Fall back to session cookie
   const token = request.cookies.get(COOKIE_NAME)?.value;
-  if (token && verifyToken(token)) {
+  if (token && (await verifyToken(token))) {
     return true;
   }
 
