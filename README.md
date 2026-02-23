@@ -25,15 +25,23 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be prompted to lo
 ### 1. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)
-2. Open **SQL Editor** and run both migration files in order:
-   - `supabase/migrations/001_initial_schema.sql`
-   - `supabase/migrations/002_google_documents.sql`
-3. Copy your credentials from **Settings → API** into `.env.local`:
+2. Copy your credentials from **Settings → API** into `.env.local`:
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
    SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
    ```
+
+#### Seed the database
+
+The app will not work until the database tables are created. Run each migration file **in order** via the Supabase SQL Editor (**Dashboard → SQL Editor → New query**):
+
+1. `supabase/migrations/001_initial_schema.sql` — core tables (inventory, sales, sync logs, settings, etc.)
+2. `supabase/migrations/002_google_documents.sql` — Google Workspace document storage
+
+For each file: copy the full contents, paste into the SQL Editor, and click **Run**. You must run them in order because later migrations may depend on earlier ones.
+
+> **Troubleshooting:** If you see errors like `Could not find the table 'public.sync_logs' in the schema cache`, the migrations haven't been applied. Go back and run them in the SQL Editor.
 
 ### 2. Configure Toast API
 
