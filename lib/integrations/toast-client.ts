@@ -3,9 +3,13 @@
 // Docs: https://doc.toasttab.com/openapi
 
 interface ToastTokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
+  token: {
+    tokenType: string;
+    accessToken: string;
+    expiresIn: number;
+    scope: string | null;
+  };
+  status: string;
 }
 
 interface ToastOrder {
@@ -71,8 +75,8 @@ async function getAccessToken(): Promise<string> {
 
   const data: ToastTokenResponse = await response.json();
   cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in - 60) * 1000, // refresh 60s early
+    token: data.token.accessToken,
+    expiresAt: Date.now() + (data.token.expiresIn - 60) * 1000, // refresh 60s early
   };
   return cachedToken.token;
 }
