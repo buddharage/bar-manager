@@ -39,13 +39,13 @@ function SettingsContent() {
   }, [searchParams]);
 
   async function checkGoogleConnection() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("settings")
-      .select("key")
-      .eq("key", "google_tokens")
-      .single();
-    setGoogleConnected(!!data);
+    try {
+      const res = await fetch("/api/auth/google/status");
+      const data = await res.json();
+      setGoogleConnected(data.connected);
+    } catch {
+      setGoogleConnected(false);
+    }
   }
 
   async function loadSyncLogs() {
@@ -103,8 +103,7 @@ function SettingsContent() {
 
   async function disconnectGoogle() {
     if (!window.confirm("Disconnect Google account? Synced documents will be preserved.")) return;
-    const supabase = createClient();
-    await supabase.from("settings").delete().eq("key", "google_tokens");
+    await fetch("/api/auth/google/status", { method: "DELETE" });
     setGoogleConnected(false);
   }
 

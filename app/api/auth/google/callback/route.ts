@@ -23,11 +23,18 @@ export async function GET(request: NextRequest) {
     const tokens = await exchangeCodeForTokens(code);
     const supabase = createServerClient();
 
-    await supabase.from("settings").upsert({
+    const { error: upsertError } = await supabase.from("settings").upsert({
       key: "google_tokens",
       value: tokens as unknown as Record<string, unknown>,
       updated_at: new Date().toISOString(),
     });
+
+    if (upsertError) {
+      console.error("Failed to store Google tokens:", upsertError);
+      return NextResponse.redirect(
+        new URL(`/settings?google=error&message=${encodeURIComponent(upsertError.message)}`, request.url)
+      );
+    }
 
     return NextResponse.redirect(new URL("/settings?google=connected", request.url));
   } catch (err) {
