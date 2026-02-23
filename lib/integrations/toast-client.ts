@@ -114,10 +114,7 @@ export async function fetchOrders(startDate: string, endDate: string): Promise<T
 
 // Fetch current inventory stock levels
 export async function fetchInventory(): Promise<ToastStockItem[]> {
-  const restaurantGuid = process.env.TOAST_RESTAURANT_GUID!;
-  return toastFetch<ToastStockItem[]>(
-    `/stock/v1/inventory/${restaurantGuid}`
-  );
+  return toastFetch<ToastStockItem[]>("/stock/v1/inventory");
 }
 
 // Fetch menu items for mapping GUIDs to names
