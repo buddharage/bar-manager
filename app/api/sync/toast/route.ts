@@ -12,11 +12,15 @@ export async function POST(request: NextRequest) {
   const supabase = createServerClient();
 
   // Create sync log
-  const { data: syncLog } = await supabase
+  const { data: syncLog, error: syncLogError } = await supabase
     .from("sync_logs")
     .insert({ source: "toast", status: "started" })
     .select()
     .single();
+
+  if (syncLogError) {
+    console.error("Failed to create sync log:", syncLogError);
+  }
 
   try {
     let totalRecords = 0;
@@ -145,14 +149,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Update sync log
-    await supabase
-      .from("sync_logs")
-      .update({
-        status: "success",
-        records_synced: totalRecords,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", syncLog!.id);
+    if (syncLog) {
+      await supabase
+        .from("sync_logs")
+        .update({
+          status: "success",
+          records_synced: totalRecords,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", syncLog.id);
+    }
 
     return NextResponse.json({
       success: true,
