@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createServerClient } from "@/lib/supabase/server";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
 
 // ============================================================
 // Chunking — split document content into overlapping pieces
@@ -81,7 +81,10 @@ export function chunkDocument(title: string, content: string): DocumentChunk[] {
  * Embed a single text string. Returns a 768-dimension vector.
  */
 export async function embedText(text: string): Promise<number[]> {
-  const result = await embeddingModel.embedContent(text);
+  const result = await embeddingModel.embedContent({
+    content: { role: "user", parts: [{ text }] },
+    outputDimensionality: 768,
+  });
   return result.embedding.values;
 }
 
@@ -100,6 +103,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     const response = await embeddingModel.batchEmbedContents({
       requests: batch.map((text) => ({
         content: { role: "user", parts: [{ text }] },
+        outputDimensionality: 768,
       })),
     });
     for (const emb of response.embeddings) {

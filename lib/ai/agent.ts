@@ -308,7 +308,7 @@ export async function chat(
   }
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     systemInstruction,
   });
 
@@ -381,7 +381,7 @@ export async function generateReorderSuggestions(): Promise<string> {
     .gte("date", weekAgo.toISOString().split("T")[0]);
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     systemInstruction: BASE_SYSTEM_INSTRUCTION,
   });
 
