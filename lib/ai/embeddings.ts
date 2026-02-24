@@ -62,11 +62,12 @@ export function chunkDocument(title: string, content: string): DocumentChunk[] {
       content: prefix + text.slice(start, end).trim(),
     });
 
+    // Reached the end of the document — no more chunks needed
+    if (end >= text.length) break;
+
     index++;
     start = end - CHUNK_OVERLAP_CHARS;
     if (start < 0) start = 0;
-    // Avoid infinite loop if overlap pushes us backwards
-    if (start >= end) break;
   }
 
   return chunks;
