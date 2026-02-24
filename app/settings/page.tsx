@@ -23,6 +23,7 @@ function SettingsContent() {
   const [syncing, setSyncing] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncingGoogle, setSyncingGoogle] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -35,6 +36,10 @@ function SettingsContent() {
     const googleStatus = searchParams.get("google");
     if (googleStatus === "connected") {
       setGoogleConnected(true);
+      setGoogleError(null);
+    } else if (googleStatus === "error") {
+      const message = searchParams.get("message") || "Unknown error";
+      setGoogleError(message);
     }
   }, [searchParams]);
 
@@ -178,6 +183,11 @@ function SettingsContent() {
             Connect your Google account to sync documents from Drive (Finances &amp; Operations folders)
             and receipts/invoices from Gmail. The AI assistant can then search these when answering questions.
           </p>
+          {googleError && (
+            <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+              <strong>Connection failed:</strong> {googleError}
+            </div>
+          )}
           {googleConnected ? (
             <div className="flex gap-2">
               <Button onClick={triggerGoogleSync} disabled={syncingGoogle}>
