@@ -22,6 +22,19 @@ interface GoogleTokens {
 }
 
 // ============================================================
+// Token Cache — avoids DB lookup on every Google API call
+// ============================================================
+
+let _cachedTokens: GoogleTokens | null = null;
+let _cacheExpiry = 0;
+
+/** Reset the in-memory token cache (call after sync completes) */
+export function resetTokenCache(): void {
+  _cachedTokens = null;
+  _cacheExpiry = 0;
+}
+
+// ============================================================
 // OAuth2 Flow
 // ============================================================
 
@@ -90,6 +103,11 @@ async function refreshAccessToken(refreshToken: string): Promise<GoogleTokens> {
 }
 
 export async function getValidTokens(): Promise<GoogleTokens> {
+  // Return cached tokens if still valid
+  if (_cachedTokens && Date.now() < _cacheExpiry) {
+    return _cachedTokens;
+  }
+
   const supabase = createServerClient();
   const { data } = await supabase
     .from("settings")
@@ -101,16 +119,19 @@ export async function getValidTokens(): Promise<GoogleTokens> {
     throw new Error("Google not connected — no tokens found in settings");
   }
 
-  const tokens = data.value as GoogleTokens;
+  let tokens = data.value as GoogleTokens;
 
   // Refresh if expired (with 60s buffer)
   if (Date.now() >= tokens.expires_at - 60_000) {
-    const refreshed = await refreshAccessToken(tokens.refresh_token);
+    tokens = await refreshAccessToken(tokens.refresh_token);
     await supabase
       .from("settings")
-      .upsert({ key: "google_tokens", value: refreshed as unknown as Record<string, unknown>, updated_at: new Date().toISOString() });
-    return refreshed;
+      .upsert({ key: "google_tokens", value: tokens as unknown as Record<string, unknown>, updated_at: new Date().toISOString() });
   }
+
+  // Cache for 4 minutes (tokens are valid for ~1 hour)
+  _cachedTokens = tokens;
+  _cacheExpiry = Date.now() + 4 * 60_000;
 
   return tokens;
 }
@@ -175,6 +196,11 @@ interface DriveFileList {
   nextPageToken?: string;
 }
 
+/** Returns true for Google-native file types that lack an md5Checksum */
+export function isGoogleNativeType(mimeType: string): boolean {
+  return mimeType.startsWith("application/vnd.google-apps.");
+}
+
 export async function findFolderByName(name: string): Promise<string | null> {
   const query = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const data = await googleFetch<DriveFileList>(
@@ -193,20 +219,28 @@ export async function listFolderFiles(
   return googleFetch<DriveFileList>(url);
 }
 
-/** Recursively list all files in a folder and its subfolders */
+/**
+ * Recursively list all files in a folder and its subfolders.
+ * Optionally collects all discovered folder IDs into the provided Set
+ * (used to build a lookup table for the Changes API).
+ */
 export async function listFolderFilesRecursive(
   folderId: string,
-  path: string
+  path: string,
+  discoveredFolderIds?: Set<string>
 ): Promise<Array<DriveFile & { path: string }>> {
   const results: Array<DriveFile & { path: string }> = [];
   let pageToken: string | undefined;
+
+  discoveredFolderIds?.add(folderId);
 
   do {
     const page = await listFolderFiles(folderId, pageToken);
     for (const file of page.files) {
       const filePath = `${path}/${file.name}`;
       if (file.mimeType === "application/vnd.google-apps.folder") {
-        const children = await listFolderFilesRecursive(file.id, filePath);
+        discoveredFolderIds?.add(file.id);
+        const children = await listFolderFilesRecursive(file.id, filePath, discoveredFolderIds);
         results.push(...children);
       } else {
         results.push({ ...file, path: filePath });
@@ -287,6 +321,40 @@ async function extractPdfText(fileId: string): Promise<string> {
 }
 
 // ============================================================
+// Drive Changes API — incremental sync
+// ============================================================
+
+interface DriveChange {
+  type: string;
+  fileId: string;
+  removed: boolean;
+  file?: DriveFile;
+}
+
+interface DriveChangeList {
+  changes: DriveChange[];
+  newStartPageToken?: string;
+  nextPageToken?: string;
+}
+
+/** Get the initial page token for the Drive Changes API */
+export async function getChangesStartPageToken(): Promise<string> {
+  const data = await googleFetch<{ startPageToken: string }>(
+    `${DRIVE_API_BASE}/changes/startPageToken`
+  );
+  return data.startPageToken;
+}
+
+/** List changes since a given page token. Returns changed files and a new token. */
+export async function listDriveChanges(
+  pageToken: string
+): Promise<DriveChangeList> {
+  return googleFetch<DriveChangeList>(
+    `${DRIVE_API_BASE}/changes?pageToken=${pageToken}&fields=changes(type,fileId,removed,file(id,name,mimeType,md5Checksum,parents,modifiedTime)),newStartPageToken,nextPageToken&pageSize=100&includeRemoved=true`
+  );
+}
+
+// ============================================================
 // Gmail
 // ============================================================
 
@@ -345,6 +413,47 @@ export async function getMessageContent(
   };
 }
 
+// ============================================================
+// Gmail History API — incremental sync
+// ============================================================
+
+interface GmailProfile {
+  emailAddress: string;
+  historyId: string;
+}
+
+interface GmailHistoryRecord {
+  id: string;
+  messagesAdded?: Array<{
+    message: { id: string; threadId: string; labelIds?: string[] };
+  }>;
+}
+
+interface GmailHistoryList {
+  history?: GmailHistoryRecord[];
+  nextPageToken?: string;
+  historyId: string;
+}
+
+/** Get the Gmail profile including the current historyId */
+export async function getGmailProfile(): Promise<GmailProfile> {
+  return googleFetch<GmailProfile>(`${GMAIL_API_BASE}/profile`);
+}
+
+/** List history events (new messages) since a given historyId */
+export async function listGmailHistory(
+  startHistoryId: string,
+  pageToken?: string
+): Promise<GmailHistoryList> {
+  let url = `${GMAIL_API_BASE}/history?startHistoryId=${startHistoryId}&historyTypes=messageAdded`;
+  if (pageToken) url += `&pageToken=${pageToken}`;
+  return googleFetch<GmailHistoryList>(url);
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
 /** Recursively extract plain text body from Gmail message payload */
 function extractBody(payload?: GmailPayload): string {
   if (!payload) return "";
@@ -400,4 +509,27 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-export type { DriveFile, GoogleTokens, GmailMessage };
+/** Run async tasks in parallel with a concurrency limit */
+export async function processInBatches<T, R>(
+  items: T[],
+  processor: (item: T) => Promise<R>,
+  concurrency: number
+): Promise<Array<{ status: "ok"; value: R } | { status: "error"; error: unknown }>> {
+  const results: Array<{ status: "ok"; value: R } | { status: "error"; error: unknown }> = [];
+
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const settled = await Promise.allSettled(batch.map(processor));
+    for (const s of settled) {
+      results.push(
+        s.status === "fulfilled"
+          ? { status: "ok", value: s.value }
+          : { status: "error", error: s.reason }
+      );
+    }
+  }
+
+  return results;
+}
+
+export type { DriveFile, DriveChange, GoogleTokens, GmailMessage };
