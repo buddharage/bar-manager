@@ -49,6 +49,18 @@ interface ToastMenuItem {
   menuGroup?: { guid: string; name: string };
 }
 
+// Toast API responses may be a direct array or wrapped in an object (e.g. { results: [...] }).
+// Normalize to always return an array.
+function normalizeToArray<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data;
+  if (data != null && typeof data === "object") {
+    const values = Object.values(data as Record<string, unknown>);
+    const arr = values.find(Array.isArray);
+    if (arr) return arr as T[];
+  }
+  return [];
+}
+
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getAccessToken(): Promise<string> {
@@ -107,19 +119,45 @@ async function toastFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
 // Fetch orders for a date range (ISO strings)
 export async function fetchOrders(startDate: string, endDate: string): Promise<ToastOrder[]> {
-  return toastFetch<ToastOrder[]>(
+  const data = await toastFetch<unknown>(
     `/orders/v2/ordersBulk?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
   );
+  return normalizeToArray<ToastOrder>(data);
 }
 
 // Fetch current inventory stock levels
 export async function fetchInventory(): Promise<ToastStockItem[]> {
-  return toastFetch<ToastStockItem[]>("/stock/v1/inventory");
+  const data = await toastFetch<unknown>("/stock/v1/inventory");
+  return normalizeToArray<ToastStockItem>(data);
 }
 
-// Fetch menu items for mapping GUIDs to names
+// Fetch menu items for mapping GUIDs to names.
+// The /menus/v2/menus endpoint returns menus containing nested menuGroups
+// and menuItems. Flatten the hierarchy to get individual menu items.
 export async function fetchMenuItems(): Promise<ToastMenuItem[]> {
-  return toastFetch<ToastMenuItem[]>("/menus/v2/menus");
+  const data = await toastFetch<unknown>("/menus/v2/menus");
+  const menus = normalizeToArray<Record<string, unknown>>(data);
+
+  const items: ToastMenuItem[] = [];
+  for (const menu of menus) {
+    const groups = Array.isArray(menu.menuGroups) ? menu.menuGroups : [];
+    for (const group of groups) {
+      const groupInfo = group.guid
+        ? { guid: group.guid as string, name: (group.name as string) || "" }
+        : undefined;
+      const menuItems = Array.isArray(group.menuItems) ? group.menuItems : [];
+      for (const item of menuItems) {
+        if (item.guid && item.name) {
+          items.push({
+            guid: item.guid as string,
+            name: item.name as string,
+            menuGroup: groupInfo,
+          });
+        }
+      }
+    }
+  }
+  return items;
 }
 
 // Parse a Toast webhook payload and verify the signature
