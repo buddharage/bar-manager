@@ -134,7 +134,7 @@ export async function replaceDocumentChunks(
     document_id: documentId,
     chunk_index: chunk.index,
     content: chunk.content,
-    embedding: `[${embeddings[i].join(",")}]`,
+    embedding: embeddings[i],
   }));
 
   // Insert in batches of 50 to stay within payload limits
@@ -174,7 +174,7 @@ export async function findSimilarChunks(
   const queryEmbedding = await embedText(query);
 
   const { data, error } = await supabase.rpc("match_document_chunks", {
-    query_embedding: `[${queryEmbedding.join(",")}]`,
+    query_embedding: queryEmbedding,
     match_threshold: threshold,
     match_count: limit,
   });
