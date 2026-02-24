@@ -28,6 +28,7 @@ export default async function DashboardPage() {
     supabase
       .from("sync_logs")
       .select("*")
+      .eq("source", "toast")
       .order("started_at", { ascending: false })
       .limit(1)
       .single(),
@@ -44,7 +45,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         {lastSync && (
           <div className="text-sm text-muted-foreground">
-            Last sync:{" "}
+            Last Toast sync:{" "}
             <Badge variant={lastSync.status === "success" ? "default" : "destructive"}>
               {lastSync.status}
             </Badge>{" "}

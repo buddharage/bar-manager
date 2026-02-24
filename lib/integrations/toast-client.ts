@@ -138,10 +138,12 @@ export function verifyWebhookSignature(
     .update(payload)
     .digest("base64");
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected)
-  );
+  const sigBuf = Buffer.from(signature);
+  const expectedBuf = Buffer.from(expected);
+
+  if (sigBuf.length !== expectedBuf.length) return false;
+
+  return crypto.timingSafeEqual(sigBuf, expectedBuf);
 }
 
 export type { ToastOrder, ToastStockItem, ToastMenuItem };

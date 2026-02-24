@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { fetchOrders, fetchInventory } from "@/lib/integrations/toast-client";
+import { fetchOrders, fetchInventory, fetchMenuItems } from "@/lib/integrations/toast-client";
 import { verifyRequest } from "@/lib/auth/session";
 
 // Daily Toast sync — called by GitHub Actions cron or manual trigger
@@ -25,15 +25,26 @@ export async function POST(request: NextRequest) {
   try {
     let totalRecords = 0;
 
-    // 1. Sync inventory stock levels
-    const stockItems = await fetchInventory();
+    // 1. Sync inventory stock levels (enriched with menu item names)
+    const [stockItems, menuItems] = await Promise.all([
+      fetchInventory(),
+      fetchMenuItems(),
+    ]);
+
+    // Build a GUID→name lookup from menu data
+    const menuNameMap = new Map<string, string>();
+    for (const mi of menuItems) {
+      menuNameMap.set(mi.guid, mi.name);
+    }
+
     for (const item of stockItems) {
+      const guid = item.menuItem.guid;
       await supabase
         .from("inventory_items")
         .upsert(
           {
-            toast_guid: item.menuItem.guid,
-            name: item.menuItem.guid, // Will be enriched from menu data
+            toast_guid: guid,
+            name: menuNameMap.get(guid) || guid,
             current_stock: item.quantity,
             last_synced_at: new Date().toISOString(),
           },
@@ -98,7 +109,7 @@ export async function POST(request: NextRequest) {
     );
     totalRecords++;
 
-    // Insert order items
+    // Insert order items (clear previous entries for this date to avoid duplicates on re-run)
     const orderItemRows = Array.from(orderItemsMap.values()).map((item) => ({
       date: dateStr,
       name: item.name,
@@ -107,6 +118,7 @@ export async function POST(request: NextRequest) {
     }));
 
     if (orderItemRows.length > 0) {
+      await supabase.from("order_items").delete().eq("date", dateStr);
       await supabase.from("order_items").insert(orderItemRows);
       totalRecords += orderItemRows.length;
     }
