@@ -84,21 +84,17 @@ function SettingsContent() {
     setSyncingGoogle(true);
 
     try {
-      const [driveRes, gmailRes] = await Promise.all([
-        fetch("/api/sync/google", { method: "POST" }),
-        fetch("/api/sync/gmail", { method: "POST" }),
-      ]);
+      const res = await fetch("/api/sync/google", { method: "POST" });
+      const data = await res.json();
 
-      const driveData = await driveRes.json();
-      const gmailData = await gmailRes.json();
-
-      const results = [];
-      if (driveData.error) results.push(`Drive: ${driveData.error}`);
-      else results.push(`Drive: ${driveData.records_synced} files synced`);
-      if (gmailData.error) results.push(`Gmail: ${gmailData.error}`);
-      else results.push(`Gmail: ${gmailData.records_synced} emails synced`);
-
-      alert(results.join("\n"));
+      if (data.error) {
+        alert(`Drive sync failed: ${data.error}`);
+      } else {
+        const parts = [`${data.records_synced} files synced`];
+        if (data.records_embedded > 0) parts.push(`${data.records_embedded} embedded`);
+        if (data.records_deleted > 0) parts.push(`${data.records_deleted} removed`);
+        alert(`Drive sync complete: ${parts.join(", ")}`);
+      }
       loadSyncLogs();
     } catch (err) {
       alert(`Google sync error: ${err}`);
@@ -180,8 +176,9 @@ function SettingsContent() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Connect your Google account to sync documents from Drive (Finances &amp; Operations folders)
-            and receipts/invoices from Gmail. The AI assistant can then search these when answering questions.
+            Connect your Google account to give the AI assistant context from your Drive
+            (Finances &amp; Operations folders) and Gmail (searched live for receipts &amp; invoices).
+            Drive documents are synced and embedded for semantic search. Gmail is queried on demand.
           </p>
           {googleError && (
             <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
@@ -191,7 +188,7 @@ function SettingsContent() {
           {googleConnected ? (
             <div className="flex gap-2">
               <Button onClick={triggerGoogleSync} disabled={syncingGoogle}>
-                {syncingGoogle ? "Syncing..." : "Sync Now"}
+                {syncingGoogle ? "Syncing Drive..." : "Sync Drive"}
               </Button>
               <Button variant="outline" onClick={disconnectGoogle}>
                 Disconnect

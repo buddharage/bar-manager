@@ -6,12 +6,11 @@ import {
   exportFileContent,
   getChangesStartPageToken,
   listDriveChanges,
-  isGoogleNativeType,
   resetTokenCache,
   processInBatches,
 } from "@/lib/integrations/google-client";
-import type { DriveFile, DriveChange } from "@/lib/integrations/google-client";
-import { createHash } from "crypto";
+import type { DriveFile } from "@/lib/integrations/google-client";
+import { chunkDocument, embedTexts, replaceDocumentChunks } from "@/lib/ai/embeddings";
 import { verifyRequest } from "@/lib/auth/session";
 
 const TARGET_FOLDERS = ["Finances", "Operations"];
@@ -57,7 +56,6 @@ async function saveSyncCursor(
  *  - Google Docs/Sheets/Slides use modifiedTime (they have no md5) */
 function fileContentHash(file: DriveFile): string {
   if (file.md5Checksum) return file.md5Checksum;
-  // For Google-native types, use modifiedTime as the change indicator
   return file.modifiedTime || "";
 }
 
@@ -73,7 +71,6 @@ async function loadExistingDocs(
   let offset = 0;
   const pageSize = 1000;
 
-  // Paginate in case there are many documents
   while (true) {
     const { data } = await supabase
       .from("documents")
@@ -98,57 +95,130 @@ async function loadExistingDocs(
 
 interface SyncResult {
   upserted: number;
+  embedded: number;
   deleted: number;
   skipped: number;
   method: "incremental" | "full_scan";
 }
 
-/** Process a batch of files: skip unchanged, export content, upsert.
- *  Returns the number of upserted records. */
+/** Process a batch of files: skip unchanged, export content, upsert, chunk + embed. */
 async function syncFiles(
   files: Array<DriveFile & { path: string; folder: string }>,
   existingDocs: Map<string, string>,
   supabase: ReturnType<typeof createServerClient>
-): Promise<{ upserted: number; skipped: number }> {
-  // Filter to only files that have changed
+): Promise<{ upserted: number; embedded: number; skipped: number }> {
   const changed = files.filter((file) => {
     const hash = fileContentHash(file);
     return existingDocs.get(file.id) !== hash;
   });
 
   const skipped = files.length - changed.length;
+  if (changed.length === 0) return { upserted: 0, embedded: 0, skipped };
 
-  if (changed.length === 0) return { upserted: 0, skipped };
-
-  // Fetch content and upsert in parallel batches
   let upserted = 0;
+  let embedded = 0;
 
   await processInBatches(
     changed,
     async (file) => {
+      // 1. Export content from Google Drive
       const content = await exportFileContent(file.id, file.mimeType);
       const hash = fileContentHash(file);
 
-      await supabase.from("documents").upsert(
-        {
-          source: "google_drive",
-          external_id: file.id,
-          title: file.name,
-          mime_type: file.mimeType,
-          content,
-          content_hash: hash,
-          metadata: { folder: file.folder, path: file.path },
-          last_synced_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "external_id" }
-      );
+      // 2. Upsert the document and get the DB row ID
+      const { data: row } = await supabase
+        .from("documents")
+        .upsert(
+          {
+            source: "google_drive",
+            external_id: file.id,
+            title: file.name,
+            mime_type: file.mimeType,
+            content,
+            content_hash: hash,
+            metadata: { folder: file.folder, path: file.path },
+            last_synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "external_id" }
+        )
+        .select("id")
+        .single();
+
       upserted++;
+
+      // 3. Chunk the content and generate vector embeddings
+      if (row) {
+        try {
+          const chunks = chunkDocument(file.name, content);
+          if (chunks.length > 0) {
+            const embeddings = await embedTexts(chunks.map((c) => c.content));
+            await replaceDocumentChunks(row.id, chunks, embeddings);
+            embedded++;
+          }
+        } catch (err) {
+          // Embedding failure shouldn't block the sync — log and continue
+          console.error(`Failed to embed ${file.name}:`, err);
+        }
+      }
     },
     CONTENT_FETCH_CONCURRENCY
   );
 
-  return { upserted, skipped };
+  return { upserted, embedded, skipped };
+}
+
+/**
+ * Backfill: generate chunks + embeddings for any documents that were
+ * synced before the vector pipeline existed (no rows in document_chunks).
+ */
+async function backfillMissingEmbeddings(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<number> {
+  // Find documents with no chunks
+  const { data: docsWithoutChunks } = await supabase
+    .from("documents")
+    .select("id, title, content")
+    .eq("source", "google_drive")
+    .not("content", "is", null)
+    .order("id");
+
+  if (!docsWithoutChunks || docsWithoutChunks.length === 0) return 0;
+
+  // Check which ones actually have chunks already
+  const { data: chunked } = await supabase
+    .from("document_chunks")
+    .select("document_id")
+    .in(
+      "document_id",
+      docsWithoutChunks.map((d: { id: number }) => d.id)
+    );
+
+  const chunkedIds = new Set((chunked || []).map((c: { document_id: number }) => c.document_id));
+  const needsEmbedding = docsWithoutChunks.filter((d: { id: number }) => !chunkedIds.has(d.id));
+
+  if (needsEmbedding.length === 0) return 0;
+
+  let count = 0;
+
+  await processInBatches(
+    needsEmbedding as Array<{ id: number; title: string; content: string }>,
+    async (doc) => {
+      try {
+        const chunks = chunkDocument(doc.title, doc.content);
+        if (chunks.length > 0) {
+          const embeddings = await embedTexts(chunks.map((c) => c.content));
+          await replaceDocumentChunks(doc.id, chunks, embeddings);
+          count++;
+        }
+      } catch (err) {
+        console.error(`Backfill embedding failed for doc ${doc.id}:`, err);
+      }
+    },
+    3 // Lower concurrency for backfill to avoid rate limits
+  );
+
+  return count;
 }
 
 /**
@@ -161,10 +231,8 @@ async function incrementalSync(
   existingDocs: Map<string, string>,
   supabase: ReturnType<typeof createServerClient>
 ): Promise<SyncResult | null> {
-  // Build a set of all known folder IDs across target folders
   const knownFolderIds = new Set<string>();
   const folderIdToName = new Map<string, string>();
-  const folderIdToPath = new Map<string, string>();
 
   for (const folderName of TARGET_FOLDERS) {
     const ids = cursor.folderIds[folderName] || [];
@@ -178,7 +246,6 @@ async function incrementalSync(
   let newStartPageToken: string | undefined;
   const changedFiles: Array<DriveFile & { path: string; folder: string }> = [];
   const removedFileIds: string[] = [];
-  let newFoldersDiscovered = false;
 
   try {
     do {
@@ -186,7 +253,6 @@ async function incrementalSync(
 
       for (const change of result.changes) {
         if (change.removed) {
-          // File was deleted — check if it's one of ours
           if (existingDocs.has(change.fileId)) {
             removedFileIds.push(change.fileId);
           }
@@ -195,15 +261,12 @@ async function incrementalSync(
 
         if (!change.file) continue;
 
-        // Check if this file belongs to one of our target folder trees
         const parentId = change.file.parents?.[0];
         if (!parentId || !knownFolderIds.has(parentId)) continue;
 
-        // New subfolder discovered — add it to our known set
         if (change.file.mimeType === "application/vnd.google-apps.folder") {
           knownFolderIds.add(change.file.id);
           folderIdToName.set(change.file.id, folderIdToName.get(parentId) || "");
-          newFoldersDiscovered = true;
           continue;
         }
 
@@ -219,14 +282,13 @@ async function incrementalSync(
       newStartPageToken = result.newStartPageToken;
     } while (pageToken);
   } catch (error: unknown) {
-    // 410 Gone = page token expired, need full scan
     if (error instanceof Error && error.message.includes("410")) {
       return null;
     }
     throw error;
   }
 
-  // Delete removed files from DB
+  // Delete removed files from DB (cascade deletes their chunks too)
   let deleted = 0;
   if (removedFileIds.length > 0) {
     await supabase
@@ -237,8 +299,7 @@ async function incrementalSync(
     deleted = removedFileIds.length;
   }
 
-  // Process changed files
-  const { upserted, skipped } = await syncFiles(changedFiles, existingDocs, supabase);
+  const { upserted, embedded, skipped } = await syncFiles(changedFiles, existingDocs, supabase);
 
   // Save updated cursor
   const updatedFolderIds: Record<string, string[]> = {};
@@ -256,7 +317,7 @@ async function incrementalSync(
     folderIds: updatedFolderIds,
   });
 
-  return { upserted, deleted, skipped, method: "incremental" };
+  return { upserted, embedded, deleted, skipped, method: "incremental" };
 }
 
 /**
@@ -289,10 +350,9 @@ async function fullScan(
     }
   }
 
-  // Sync changed files
-  const { upserted, skipped } = await syncFiles(allFiles, existingDocs, supabase);
+  const { upserted, embedded, skipped } = await syncFiles(allFiles, existingDocs, supabase);
 
-  // Remove stale documents (exist in DB but no longer in Drive)
+  // Remove stale documents (cascade deletes chunks too)
   let deleted = 0;
   const staleIds = [...existingDocs.keys()].filter((id) => !seenExternalIds.has(id));
   if (staleIds.length > 0) {
@@ -304,11 +364,10 @@ async function fullScan(
     deleted = staleIds.length;
   }
 
-  // Save cursor with current page token for future incremental syncs
   const changesPageToken = await getChangesStartPageToken();
   await saveSyncCursor(supabase, { changesPageToken, folderIds });
 
-  return { upserted, deleted, skipped, method: "full_scan" };
+  return { upserted, embedded, deleted, skipped, method: "full_scan" };
 }
 
 // ============================================================
@@ -330,7 +389,6 @@ export async function POST(request: NextRequest) {
     .single();
 
   try {
-    // Load existing documents and sync cursor in parallel
     const [existingDocs, cursor] = await Promise.all([
       loadExistingDocs(supabase),
       loadSyncCursor(supabase),
@@ -339,19 +397,19 @@ export async function POST(request: NextRequest) {
     let result: SyncResult;
 
     if (cursor) {
-      // Try incremental sync first
       const incremental = await incrementalSync(cursor, existingDocs, supabase);
       if (incremental) {
         result = incremental;
       } else {
-        // Page token expired — fall back to full scan
         console.log("Drive Changes token expired, falling back to full scan");
         result = await fullScan(existingDocs, supabase);
       }
     } else {
-      // No cursor — first sync, do a full scan
       result = await fullScan(existingDocs, supabase);
     }
+
+    // Backfill embeddings for any documents synced before the vector pipeline
+    const backfilled = await backfillMissingEmbeddings(supabase);
 
     await supabase
       .from("sync_logs")
@@ -366,6 +424,7 @@ export async function POST(request: NextRequest) {
       success: true,
       method: result.method,
       records_synced: result.upserted,
+      records_embedded: result.embedded + backfilled,
       records_deleted: result.deleted,
       records_skipped: result.skipped,
     });

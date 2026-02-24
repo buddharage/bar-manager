@@ -5,18 +5,17 @@ import {
   type Tool,
 } from "@google/generative-ai";
 import { createServerClient } from "@/lib/supabase/server";
+import { findSimilarChunks } from "@/lib/ai/embeddings";
+import { searchMessages, getMessageContent, processInBatches } from "@/lib/integrations/google-client";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
-  systemInstruction: `You are an AI assistant for a 50-seat cocktail bar in Brooklyn, NY.
+const BASE_SYSTEM_INSTRUCTION = `You are an AI assistant for a 50-seat cocktail bar in Brooklyn, NY.
 You help with inventory management, sales analysis, scheduling, and general bar operations.
 You have access to tools to query the bar's database. Use them to answer questions with real data.
-You can also search documents from Google Drive (Finances and Operations folders) and emails from Gmail
-(receipts, invoices, order confirmations). Use search_documents for Drive files and search_emails for Gmail messages.
-Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.`,
-});
+You can search Gmail live for receipts, invoices, and order confirmations using the search_gmail tool.
+Relevant documents from Google Drive are automatically provided as context below when available.
+Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.`;
 
 // Tool definitions for Gemini function calling
 const tools: Tool[] = [
@@ -100,56 +99,37 @@ const tools: Tool[] = [
       {
         name: "search_documents",
         description:
-          "Search synced Google Drive documents (from Finances and Operations folders) and Gmail messages using full-text search.",
+          "Search Google Drive documents using semantic similarity. Use this for deeper or more specific searches beyond the auto-provided context.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             query: {
               type: SchemaType.STRING,
-              description: "Search query (e.g., 'Sysco invoice', 'liquor license', 'P&L 2024')",
-            },
-            source: {
-              type: SchemaType.STRING,
-              description: "Filter by source: 'google_drive' or 'gmail'. Omit to search both.",
-            },
-            folder: {
-              type: SchemaType.STRING,
-              description: "Filter Google Drive results by folder name (e.g., 'Finances', 'Operations')",
+              description: "Natural language search query (e.g., 'Sysco invoice from January', 'liquor license renewal', 'P&L 2024')",
             },
             limit: {
               type: SchemaType.INTEGER,
-              description: "Max number of results to return (default 10)",
+              description: "Max number of results to return (default 5)",
             },
           },
           required: ["query"],
         },
       },
       {
-        name: "search_emails",
+        name: "search_gmail",
         description:
-          "Search synced Gmail messages with email-specific filters (from, date range).",
+          "Search Gmail live for emails. Always returns the latest results. Supports Gmail search operators.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             query: {
               type: SchemaType.STRING,
-              description: "Search query for email subject and body",
+              description:
+                "Gmail search query. Supports operators like from:, subject:, after:, before:, has:attachment (e.g., 'from:sysco subject:invoice after:2025/01/01')",
             },
-            from_email: {
-              type: SchemaType.STRING,
-              description: "Filter by sender email or name",
-            },
-            date_from: {
-              type: SchemaType.STRING,
-              description: "Filter emails from this date (YYYY-MM-DD)",
-            },
-            date_to: {
-              type: SchemaType.STRING,
-              description: "Filter emails up to this date (YYYY-MM-DD)",
-            },
-            limit: {
+            max_results: {
               type: SchemaType.INTEGER,
-              description: "Max number of results to return (default 10)",
+              description: "Maximum number of emails to return (default 5)",
             },
           },
           required: ["query"],
@@ -178,7 +158,6 @@ async function executeTool(
       }
       if (args.low_stock_only) {
         query = query.not("par_level", "is", null);
-        // RPC or filter client-side since Supabase doesn't support col-vs-col filters easily
       }
 
       const { data, error } = await query;
@@ -213,7 +192,6 @@ async function executeTool(
 
       if (error) throw error;
 
-      // Aggregate in memory (Supabase free tier doesn't support custom SQL via API)
       const grouped = new Map<string, { quantity: number; revenue: number }>();
       for (const item of data || []) {
         const key = item.name;
@@ -249,69 +227,50 @@ async function executeTool(
     }
 
     case "search_documents": {
-      const limit = (args.limit as number) || 10;
-      const tsQuery = (args.query as string)
-        .split(/\s+/)
-        .filter(Boolean)
-        .join(" & ");
+      const limit = (args.limit as number) || 5;
+      const query = args.query as string;
 
-      let query = supabase
-        .from("documents")
-        .select("id, source, title, content, metadata")
-        .textSearch("content_tsv", tsQuery)
-        .limit(limit);
+      const chunks = await findSimilarChunks(query, limit);
 
-      if (args.source) {
-        query = query.eq("source", args.source);
-      }
-      if (args.folder) {
-        query = query.eq("metadata->>folder", args.folder);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      return (data || []).map((doc) => ({
-        title: doc.title,
-        source: doc.source,
-        metadata: doc.metadata,
-        content: doc.content?.slice(0, 8000) || "",
+      return chunks.map((chunk) => ({
+        title: chunk.title || "Untitled",
+        folder: chunk.folder || "",
+        content: chunk.content,
+        similarity: Math.round(chunk.similarity * 100) + "%",
       }));
     }
 
-    case "search_emails": {
-      const limit = (args.limit as number) || 10;
-      const tsQuery = (args.query as string)
-        .split(/\s+/)
-        .filter(Boolean)
-        .join(" & ");
+    case "search_gmail": {
+      const maxResults = (args.max_results as number) || 5;
+      const query = args.query as string;
 
-      let query = supabase
-        .from("documents")
-        .select("id, title, content, metadata")
-        .eq("source", "gmail")
-        .textSearch("content_tsv", tsQuery)
-        .limit(limit);
+      const searchResult = await searchMessages(query);
+      const messageRefs = (searchResult.messages || []).slice(0, maxResults);
 
-      if (args.from_email) {
-        query = query.ilike("metadata->>from", `%${args.from_email}%`);
-      }
-      if (args.date_from) {
-        query = query.gte("metadata->>date", args.date_from);
-      }
-      if (args.date_to) {
-        query = query.lte("metadata->>date", args.date_to);
-      }
+      if (messageRefs.length === 0) return [];
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const results: Array<{
+        subject: string;
+        from: string;
+        date: string;
+        body: string;
+      }> = [];
 
-      return (data || []).map((doc) => ({
-        subject: doc.title,
-        from: (doc.metadata as Record<string, unknown>)?.from || "",
-        date: (doc.metadata as Record<string, unknown>)?.date || "",
-        body: doc.content?.slice(0, 6000) || "",
-      }));
+      await processInBatches(
+        messageRefs,
+        async (msg) => {
+          const content = await getMessageContent(msg.id);
+          results.push({
+            subject: content.subject,
+            from: content.from,
+            date: content.date,
+            body: content.body.slice(0, 4000),
+          });
+        },
+        3
+      );
+
+      return results;
     }
 
     default:
@@ -327,6 +286,32 @@ export interface ChatMessage {
 export async function chat(
   messages: ChatMessage[]
 ): Promise<string> {
+  const lastMessage = messages[messages.length - 1];
+
+  // ── Auto-RAG: retrieve relevant Drive document chunks ──
+  let systemInstruction = BASE_SYSTEM_INSTRUCTION;
+
+  try {
+    const chunks = await findSimilarChunks(lastMessage.content, 5, 0.35);
+
+    if (chunks.length > 0) {
+      systemInstruction += "\n\n─── RELEVANT DOCUMENTS FROM GOOGLE DRIVE ───";
+      for (const chunk of chunks) {
+        const source = [chunk.title, chunk.folder].filter(Boolean).join(" — ");
+        systemInstruction += `\n\n[${source}]\n${chunk.content}`;
+      }
+      systemInstruction += "\n\n─── END DOCUMENTS ───";
+    }
+  } catch (err) {
+    // RAG failure shouldn't break chat — proceed without context
+    console.error("RAG retrieval failed:", err);
+  }
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    systemInstruction,
+  });
+
   const chatSession = model.startChat({
     tools,
     history: messages.slice(0, -1).map((m) => ({
@@ -335,7 +320,6 @@ export async function chat(
     })),
   });
 
-  const lastMessage = messages[messages.length - 1];
   let result: GenerateContentResult = await chatSession.sendMessage(lastMessage.content);
 
   // Handle tool calls in a loop (Gemini may call multiple tools)
@@ -376,7 +360,6 @@ export async function chat(
 export async function generateReorderSuggestions(): Promise<string> {
   const supabase = createServerClient();
 
-  // Fetch low-stock items
   const { data: items } = await supabase
     .from("inventory_items")
     .select("*")
@@ -390,13 +373,17 @@ export async function generateReorderSuggestions(): Promise<string> {
     return "All inventory items are above par levels. No reorders needed.";
   }
 
-  // Fetch recent sales velocity (last 7 days of order items)
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
   const { data: recentOrders } = await supabase
     .from("order_items")
     .select("*")
     .gte("date", weekAgo.toISOString().split("T")[0]);
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    systemInstruction: BASE_SYSTEM_INSTRUCTION,
+  });
 
   const prompt = `Analyze this bar inventory data and generate a reorder list.
 
