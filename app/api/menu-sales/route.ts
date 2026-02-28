@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth/session";
 // Normalize item names so that variants of the same product are aggregated.
 // A product can appear on the Toast menu as:
 //   "Item Name"  /  "Item Name (Happy Hour)"  /  "Item Name and a Shot"
-//   "Item & Shot"  /  "Item and a Shot"
+//   "Item & Shot"  /  "Item and a Shot"  /  "Item and Shot"
 // All should roll up under the base name.
 // This applies to specific beers (Miller High Life, Tecate, Corona)
 // and all wine-category items.
@@ -25,7 +25,7 @@ function normalizeItemName(name: string, category?: string): string {
 
   if (lowerCat?.includes("wine") || lowerCat?.includes("beer")) {
     normalized = normalized
-      .replace(/\s+and a Shot\s*$/i, "")
+      .replace(/\s+and\s+(a\s+)?Shot\s*$/i, "")
       .replace(/\s*&\s*Shot\s*$/i, "")
       .trim();
 
