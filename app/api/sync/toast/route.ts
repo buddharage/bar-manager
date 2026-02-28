@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { fetchOrders, fetchInventory, fetchMenuItems } from "@/lib/integrations/toast-client";
+import { fetchOrders, fetchInventory, fetchMenuItems, fetchMenuItemCategoryMap, fetchSizeOptionGroupGuids } from "@/lib/integrations/toast-client";
 import { verifyRequest } from "@/lib/auth/session";
 
 // Daily Toast sync — called by GitHub Actions cron or manual trigger
@@ -26,9 +26,11 @@ export async function POST(request: NextRequest) {
     let totalRecords = 0;
 
     // 1. Sync inventory stock levels (enriched with menu item names)
-    const [stockItems, menuItems] = await Promise.all([
+    const [stockItems, menuItems, categoryMap, sizeGroupGuids] = await Promise.all([
       fetchInventory(),
       fetchMenuItems(),
+      fetchMenuItemCategoryMap(),
+      fetchSizeOptionGroupGuids(),
     ]);
 
     // Build a GUID→name lookup from menu data
@@ -68,7 +70,14 @@ export async function POST(request: NextRequest) {
     let tipAmount = 0;
     let discountAmount = 0;
     const paymentBreakdown: Record<string, number> = {};
-    const orderItemsMap = new Map<string, { name: string; quantity: number; revenue: number }>();
+    const orderItemsMap = new Map<string, {
+      name: string;
+      quantity: number;
+      revenue: number;
+      category: string | null;
+      size: string | null;
+      menu_item_guid: string | null;
+    }>();
 
     for (const order of orders) {
       grossSales += order.totalAmount || 0;
@@ -83,10 +92,30 @@ export async function POST(request: NextRequest) {
             (paymentBreakdown[payment.type] || 0) + payment.amount;
         }
 
-        // Aggregate order items
+        // Aggregate order items — keyed by (name, category, size)
         for (const selection of check.selections || []) {
-          const key = selection.displayName;
-          const existing = orderItemsMap.get(key) || { name: key, quantity: 0, revenue: 0 };
+          const itemGuid = selection.item?.guid || null;
+          const category = itemGuid ? (categoryMap.get(itemGuid) || null) : null;
+
+          // Extract size from modifiers: find the first modifier whose
+          // optionGroup is a known size group (identified from the menus API).
+          let size: string | null = null;
+          for (const mod of selection.modifiers || []) {
+            if (mod.optionGroup?.guid && sizeGroupGuids.has(mod.optionGroup.guid)) {
+              size = mod.displayName;
+              break;
+            }
+          }
+
+          const key = `${selection.displayName}||${category}||${size}`;
+          const existing = orderItemsMap.get(key) || {
+            name: selection.displayName,
+            quantity: 0,
+            revenue: 0,
+            category,
+            size,
+            menu_item_guid: itemGuid,
+          };
           existing.quantity += selection.quantity || 1;
           existing.revenue += selection.price || 0;
           orderItemsMap.set(key, existing);
@@ -112,9 +141,12 @@ export async function POST(request: NextRequest) {
     // Insert order items (clear previous entries for this date to avoid duplicates on re-run)
     const orderItemRows = Array.from(orderItemsMap.values()).map((item) => ({
       date: dateStr,
+      menu_item_guid: item.menu_item_guid,
       name: item.name,
       quantity: item.quantity,
       revenue: item.revenue,
+      category: item.category,
+      size: item.size,
     }));
 
     if (orderItemRows.length > 0) {

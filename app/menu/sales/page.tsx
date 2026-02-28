@@ -37,6 +37,7 @@ interface SubItem {
 interface MenuSaleItem {
   name: string;
   category: string;
+  size: string | null;
   quantity: number;
   revenue: number;
   subItems?: SubItem[];
@@ -365,6 +366,7 @@ export default function MenuSalesPage() {
                       <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
                     </button>
                   </TableHead>
+                  <TableHead>Size</TableHead>
                   <TableHead className="text-right">
                     <button
                       type="button"
@@ -402,6 +404,7 @@ export default function MenuSalesPage() {
                                 ({groupItems.length} item{groupItems.length !== 1 ? "s" : ""})
                               </span>
                             </TableCell>
+                            <TableCell />
                             <TableCell className="text-right font-semibold">
                               {groupQty.toLocaleString()}
                             </TableCell>
@@ -410,7 +413,7 @@ export default function MenuSalesPage() {
                             </TableCell>
                           </TableRow>
                           {groupItems.map((item, idx) => (
-                            <Fragment key={item.name}>
+                            <Fragment key={`${item.name}-${item.size}`}>
                               <TableRow
                                 className={item.subItems ? "cursor-pointer" : undefined}
                                 onClick={item.subItems ? () => toggleExpanded(item.name) : undefined}
@@ -426,6 +429,11 @@ export default function MenuSalesPage() {
                                   )}
                                   {item.name}
                                 </TableCell>
+                                <TableCell>
+                                  {item.size && (
+                                    <Badge variant="outline">{item.size}</Badge>
+                                  )}
+                                </TableCell>
                                 <TableCell className="text-right">
                                   {item.quantity.toLocaleString()}
                                 </TableCell>
@@ -440,6 +448,7 @@ export default function MenuSalesPage() {
                                     <TableCell className="pl-12 text-sm text-muted-foreground">
                                       {sub.name}
                                     </TableCell>
+                                    <TableCell />
                                     <TableCell className="text-right text-sm text-muted-foreground">
                                       {sub.quantity.toLocaleString()}
                                     </TableCell>
@@ -454,7 +463,7 @@ export default function MenuSalesPage() {
                       );
                     })
                   : sortedItems.map((item, index) => (
-                      <Fragment key={item.name}>
+                      <Fragment key={`${item.name}-${item.size}`}>
                         <TableRow
                           className={item.subItems ? "cursor-pointer" : undefined}
                           onClick={item.subItems ? () => toggleExpanded(item.name) : undefined}
@@ -470,6 +479,11 @@ export default function MenuSalesPage() {
                             )}
                             {item.name}
                           </TableCell>
+                          <TableCell>
+                            {item.size && (
+                              <Badge variant="outline">{item.size}</Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             {item.quantity.toLocaleString()}
                           </TableCell>
@@ -484,6 +498,7 @@ export default function MenuSalesPage() {
                               <TableCell className="pl-10 text-sm text-muted-foreground">
                                 {sub.name}
                               </TableCell>
+                              <TableCell />
                               <TableCell className="text-right text-sm text-muted-foreground">
                                 {sub.quantity.toLocaleString()}
                               </TableCell>
