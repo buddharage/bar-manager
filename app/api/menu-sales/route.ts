@@ -23,7 +23,7 @@ function normalizeItemName(name: string, category?: string): string {
 
   const lowerCat = category?.toLowerCase();
 
-  if (lowerCat === "wine" || lowerCat === "beer") {
+  if (lowerCat?.includes("wine") || lowerCat?.includes("beer")) {
     normalized = normalized
       .replace(/\s+and a Shot\s*$/i, "")
       .replace(/\s*&\s*Shot\s*$/i, "")
@@ -104,7 +104,11 @@ export async function GET(request: NextRequest) {
   >();
 
   for (const item of data || []) {
-    const rawCategory = item.category || inventoryCategoryMap.get(item.name) || "Uncategorized";
+    const baseName = item.name.replace(/\s*\(Happy Hour\)\s*$/i, "").trim();
+    const rawCategory = item.category
+      || inventoryCategoryMap.get(item.name)
+      || inventoryCategoryMap.get(baseName)
+      || "Uncategorized";
     const canonicalName = normalizeItemName(item.name, rawCategory);
     const size = item.size || null;
     const key = `${canonicalName}||${size}`;
