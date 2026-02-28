@@ -44,6 +44,8 @@ export interface OrderItem {
   name: string;
   quantity: number;
   revenue: number;
+  category: string | null;
+  size: string | null;
   created_at: string;
 }
 

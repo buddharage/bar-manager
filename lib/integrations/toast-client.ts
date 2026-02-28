@@ -24,8 +24,10 @@ interface ToastOrder {
   checks: Array<{
     selections: Array<{
       guid: string;
+      item?: { guid: string };
       itemGroup?: { guid: string };
       displayName: string;
+      preModifier?: string;
       quantity: number;
       price: number;
     }>;
@@ -182,6 +184,19 @@ export function verifyWebhookSignature(
   if (sigBuf.length !== expectedBuf.length) return false;
 
   return crypto.timingSafeEqual(sigBuf, expectedBuf);
+}
+
+// Build a lookup of menu-item GUID → menu group name (category).
+// Useful for enriching order-item rows with the category they belong to.
+export async function fetchMenuItemCategoryMap(): Promise<Map<string, string>> {
+  const items = await fetchMenuItems();
+  const map = new Map<string, string>();
+  for (const item of items) {
+    if (item.menuGroup?.name) {
+      map.set(item.guid, item.menuGroup.name);
+    }
+  }
+  return map;
 }
 
 export type { ToastOrder, ToastStockItem, ToastMenuItem };
