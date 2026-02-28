@@ -30,10 +30,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Fetch category mapping from inventory_items
+  const { data: inventoryItems } = await supabase
+    .from("inventory_items")
+    .select("name, category");
+
+  const categoryMap = new Map<string, string>();
+  for (const inv of inventoryItems || []) {
+    if (inv.name && inv.category) {
+      categoryMap.set(inv.name, inv.category);
+    }
+  }
+
   // Aggregate by menu item name
   const grouped = new Map<
     string,
-    { name: string; quantity: number; revenue: number }
+    { name: string; category: string; quantity: number; revenue: number }
   >();
 
   for (const item of data || []) {
@@ -44,6 +56,7 @@ export async function GET(request: NextRequest) {
     } else {
       grouped.set(item.name, {
         name: item.name,
+        category: categoryMap.get(item.name) || "Uncategorized",
         quantity: item.quantity,
         revenue: item.revenue,
       });
@@ -51,7 +64,7 @@ export async function GET(request: NextRequest) {
   }
 
   const items = Array.from(grouped.values()).sort(
-    (a, b) => b.revenue - a.revenue
+    (a, b) => b.quantity - a.quantity
   );
 
   const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
