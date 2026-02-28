@@ -27,9 +27,15 @@ interface ToastOrder {
       item?: { guid: string };
       itemGroup?: { guid: string };
       displayName: string;
-      preModifier?: string;
       quantity: number;
       price: number;
+      modifiers?: Array<{
+        guid: string;
+        displayName: string;
+        optionGroup?: { guid: string };
+        quantity: number;
+        price: number;
+      }>;
     }>;
     payments: Array<{
       type: string;
@@ -197,6 +203,35 @@ export async function fetchMenuItemCategoryMap(): Promise<Map<string, string>> {
     }
   }
   return map;
+}
+
+// Build a set of modifier-option-group GUIDs that represent sizes.
+// Toast menus nest optionGroups (modifier groups) inside menu items.
+// We identify size groups by name (case-insensitive contains "size").
+// Returns a Set of optionGroup GUIDs so the sync can check
+// `modifier.optionGroup.guid` against this set.
+export async function fetchSizeOptionGroupGuids(): Promise<Set<string>> {
+  const data = await toastFetch<unknown>("/menus/v2/menus");
+  const menus = normalizeToArray<Record<string, unknown>>(data);
+
+  const sizeGuids = new Set<string>();
+
+  for (const menu of menus) {
+    const groups = Array.isArray(menu.menuGroups) ? menu.menuGroups : [];
+    for (const group of groups) {
+      const menuItems = Array.isArray(group.menuItems) ? group.menuItems : [];
+      for (const item of menuItems) {
+        const optionGroups = Array.isArray(item.optionGroups) ? item.optionGroups : [];
+        for (const og of optionGroups) {
+          const name = (og.name as string) || "";
+          if (name.toLowerCase().includes("size")) {
+            if (og.guid) sizeGuids.add(og.guid as string);
+          }
+        }
+      }
+    }
+  }
+  return sizeGuids;
 }
 
 export type { ToastOrder, ToastStockItem, ToastMenuItem };
