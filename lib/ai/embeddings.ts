@@ -1,8 +1,11 @@
 // Document chunking + Gemini vector embeddings + similarity search
 // Used by the Drive sync pipeline (chunk & embed) and the chat agent (retrieve)
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type EmbedContentRequest } from "@google/generative-ai";
 import { createServerClient } from "@/lib/supabase/server";
+
+// The SDK type doesn't yet include outputDimensionality, but the API supports it
+type EmbedRequest = EmbedContentRequest & { outputDimensionality?: number };
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
@@ -84,7 +87,7 @@ export async function embedText(text: string): Promise<number[]> {
   const result = await embeddingModel.embedContent({
     content: { role: "user", parts: [{ text }] },
     outputDimensionality: 768,
-  });
+  } as EmbedRequest);
   return result.embedding.values;
 }
 
@@ -104,7 +107,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
       requests: batch.map((text) => ({
         content: { role: "user", parts: [{ text }] },
         outputDimensionality: 768,
-      })),
+      } as EmbedRequest)),
     });
     for (const emb of response.embeddings) {
       results.push(emb.values);
