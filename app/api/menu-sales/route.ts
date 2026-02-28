@@ -3,16 +3,25 @@ import { createServerClient } from "@/lib/supabase/server";
 import { verifyToken } from "@/lib/auth/session";
 
 // Normalize item names so that variants of the same product are aggregated.
-// e.g. "Miller High Life (Happy Hour)" and "Miller High Life and a Shot" → "Miller High Life"
+// Each product can appear in three forms on the Toast menu:
+//   "Item Name"  /  "Item Name (Happy Hour)"  /  "Item Name and a Shot"
+// All three should roll up under the base "Item Name".
 function normalizeItemName(name: string, category?: string): string {
   const lower = name.toLowerCase();
 
+  // Beer variants — name always contains the base product name
   if (lower.includes("miller high life")) return "Miller High Life";
   if (lower.includes("tecate")) return "Tecate";
   if (lower.includes("corona")) return "Corona";
 
-  // Aggregate all wine items into a single "Wine" entry
-  if (category?.toLowerCase() === "wine") return "Wine";
+  // Wine variants — strip the (Happy Hour) / and a Shot suffixes so each
+  // wine type (e.g. "Pinot Grigio") keeps its own row.
+  if (category?.toLowerCase() === "wine") {
+    return name
+      .replace(/\s*\(Happy Hour\)\s*$/i, "")
+      .replace(/\s+and a Shot\s*$/i, "")
+      .trim();
+  }
 
   return name;
 }
