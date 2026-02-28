@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { verifyToken } from "@/lib/auth/session";
 
+// Normalize item names so that variants of the same product are aggregated.
+// e.g. "Miller High Life (Happy Hour)" and "Miller High Life and a Shot" → "Miller High Life"
+function normalizeItemName(name: string, category?: string): string {
+  const lower = name.toLowerCase();
+
+  if (lower.includes("miller high life")) return "Miller High Life";
+  if (lower.includes("tecate")) return "Tecate";
+  if (lower.includes("corona")) return "Corona";
+
+  // Aggregate all wine items into a single "Wine" entry
+  if (category?.toLowerCase() === "wine") return "Wine";
+
+  return name;
+}
+
 export async function GET(request: NextRequest) {
   // Verify session
   const token = request.cookies.get("session")?.value;
@@ -42,21 +57,24 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Aggregate by menu item name
+  // Aggregate by normalized menu item name so that variants (e.g. happy-hour
+  // pricing, combo items) are rolled up under a single canonical name.
   const grouped = new Map<
     string,
     { name: string; category: string; quantity: number; revenue: number }
   >();
 
   for (const item of data || []) {
-    const existing = grouped.get(item.name);
+    const rawCategory = categoryMap.get(item.name) || "Uncategorized";
+    const canonicalName = normalizeItemName(item.name, rawCategory);
+    const existing = grouped.get(canonicalName);
     if (existing) {
       existing.quantity += item.quantity;
       existing.revenue += item.revenue;
     } else {
-      grouped.set(item.name, {
-        name: item.name,
-        category: categoryMap.get(item.name) || "Uncategorized",
+      grouped.set(canonicalName, {
+        name: canonicalName,
+        category: categoryMap.get(canonicalName) || rawCategory,
         quantity: item.quantity,
         revenue: item.revenue,
       });
