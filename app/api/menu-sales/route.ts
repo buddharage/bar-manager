@@ -48,19 +48,29 @@ export async function GET(request: NextRequest) {
 
   const supabase = createServerClient();
 
-  let query = supabase.from("order_items").select("*");
+  // Paginate through all rows to avoid the default 1000-row limit,
+  // which would cause incomplete aggregation over larger date ranges.
+  const PAGE_SIZE = 1000;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any[] = [];
+  let from = 0;
 
-  if (startDate) {
-    query = query.gte("date", startDate);
-  }
-  if (endDate) {
-    query = query.lte("date", endDate);
-  }
+  while (true) {
+    let pageQuery = supabase.from("order_items").select("*");
+    if (startDate) pageQuery = pageQuery.gte("date", startDate);
+    if (endDate) pageQuery = pageQuery.lte("date", endDate);
 
-  const { data, error } = await query.order("date", { ascending: false });
+    const { data: page, error } = await pageQuery
+      .order("date", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!page || page.length === 0) break;
+    data.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
 
   // Build a fallback name→category map from inventory_items for old rows

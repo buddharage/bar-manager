@@ -139,6 +139,36 @@ export async function fetchInventory(): Promise<ToastStockItem[]> {
   return normalizeToArray<ToastStockItem>(data);
 }
 
+// Recursively collect menu items from a list of menuGroups.
+// Toast menus support nested sub-groups, so we must recurse to find all items.
+function collectMenuItems(
+  groups: Array<Record<string, unknown>>,
+  items: ToastMenuItem[]
+): void {
+  for (const group of groups) {
+    const groupInfo = group.guid
+      ? { guid: group.guid as string, name: (group.name as string) || "" }
+      : undefined;
+
+    const menuItems = Array.isArray(group.menuItems) ? group.menuItems : [];
+    for (const item of menuItems) {
+      if (item.guid && item.name) {
+        items.push({
+          guid: item.guid as string,
+          name: item.name as string,
+          menuGroup: groupInfo,
+        });
+      }
+    }
+
+    // Recurse into nested sub-groups
+    const subGroups = Array.isArray(group.menuGroups) ? group.menuGroups : [];
+    if (subGroups.length > 0) {
+      collectMenuItems(subGroups, items);
+    }
+  }
+}
+
 // Fetch menu items for mapping GUIDs to names.
 // The /menus/v2/menus endpoint returns menus containing nested menuGroups
 // and menuItems. Flatten the hierarchy to get individual menu items.
@@ -149,21 +179,7 @@ export async function fetchMenuItems(): Promise<ToastMenuItem[]> {
   const items: ToastMenuItem[] = [];
   for (const menu of menus) {
     const groups = Array.isArray(menu.menuGroups) ? menu.menuGroups : [];
-    for (const group of groups) {
-      const groupInfo = group.guid
-        ? { guid: group.guid as string, name: (group.name as string) || "" }
-        : undefined;
-      const menuItems = Array.isArray(group.menuItems) ? group.menuItems : [];
-      for (const item of menuItems) {
-        if (item.guid && item.name) {
-          items.push({
-            guid: item.guid as string,
-            name: item.name as string,
-            menuGroup: groupInfo,
-          });
-        }
-      }
-    }
+    collectMenuItems(groups, items);
   }
   return items;
 }
@@ -205,9 +221,56 @@ export async function fetchMenuItemCategoryMap(): Promise<Map<string, string>> {
   return map;
 }
 
+// Check whether an optionGroup name indicates a size modifier.
+function isSizeOptionGroup(name: string): boolean {
+  return name.toLowerCase().includes("size");
+}
+
+// Collect size-related optionGroup GUIDs from a list of optionGroups.
+function collectSizeGuidsFromOptionGroups(
+  optionGroups: Array<Record<string, unknown>>,
+  sizeGuids: Set<string>
+): void {
+  for (const og of optionGroups) {
+    const name = (og.name as string) || "";
+    if (isSizeOptionGroup(name) && og.guid) {
+      sizeGuids.add(og.guid as string);
+    }
+  }
+}
+
+// Recursively collect size optionGroup GUIDs from nested menuGroups.
+// Checks optionGroups at both the menuGroup level (shared modifiers
+// inherited by all items in the group) and the menuItem level.
+function collectSizeGuidsFromGroups(
+  groups: Array<Record<string, unknown>>,
+  sizeGuids: Set<string>
+): void {
+  for (const group of groups) {
+    // Check optionGroups at the menuGroup level (shared modifiers)
+    const groupOGs = Array.isArray(group.optionGroups) ? group.optionGroups : [];
+    collectSizeGuidsFromOptionGroups(groupOGs, sizeGuids);
+
+    // Check optionGroups on each menuItem
+    const menuItems = Array.isArray(group.menuItems) ? group.menuItems : [];
+    for (const item of menuItems) {
+      const itemOGs = Array.isArray(item.optionGroups) ? item.optionGroups : [];
+      collectSizeGuidsFromOptionGroups(itemOGs, sizeGuids);
+    }
+
+    // Recurse into nested sub-groups
+    const subGroups = Array.isArray(group.menuGroups) ? group.menuGroups : [];
+    if (subGroups.length > 0) {
+      collectSizeGuidsFromGroups(subGroups, sizeGuids);
+    }
+  }
+}
+
 // Build a set of modifier-option-group GUIDs that represent sizes.
-// Toast menus nest optionGroups (modifier groups) inside menu items.
-// We identify size groups by name (case-insensitive contains "size").
+// Toast menus nest optionGroups (modifier groups) inside menu items
+// and menu groups. We identify size groups by name (case-insensitive
+// contains "size"). Recursively traverses nested menuGroups to find
+// all size option groups.
 // Returns a Set of optionGroup GUIDs so the sync can check
 // `modifier.optionGroup.guid` against this set.
 export async function fetchSizeOptionGroupGuids(): Promise<Set<string>> {
@@ -218,18 +281,7 @@ export async function fetchSizeOptionGroupGuids(): Promise<Set<string>> {
 
   for (const menu of menus) {
     const groups = Array.isArray(menu.menuGroups) ? menu.menuGroups : [];
-    for (const group of groups) {
-      const menuItems = Array.isArray(group.menuItems) ? group.menuItems : [];
-      for (const item of menuItems) {
-        const optionGroups = Array.isArray(item.optionGroups) ? item.optionGroups : [];
-        for (const og of optionGroups) {
-          const name = (og.name as string) || "";
-          if (name.toLowerCase().includes("size")) {
-            if (og.guid) sizeGuids.add(og.guid as string);
-          }
-        }
-      }
-    }
+    collectSizeGuidsFromGroups(groups, sizeGuids);
   }
   return sizeGuids;
 }
