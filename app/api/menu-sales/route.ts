@@ -17,22 +17,23 @@ const BEER_ALIASES: Record<string, string> = {
 };
 
 function normalizeItemName(name: string, category?: string): string {
+  // "(Happy Hour)" is a pricing variant that applies to any category —
+  // strip it universally so happy-hour items aggregate with their base item.
+  let normalized = name.replace(/\s*\(Happy Hour\)\s*$/i, "").trim();
+
   const lowerCat = category?.toLowerCase();
 
-  if (lowerCat === "wine" || lowerCat === "beer") {
-    let normalized = name
-      .replace(/\s*\(Happy Hour\)\s*$/i, "")
+  if (lowerCat?.includes("wine") || lowerCat?.includes("beer")) {
+    normalized = normalized
       .replace(/\s+and a Shot\s*$/i, "")
       .replace(/\s*&\s*Shot\s*$/i, "")
       .trim();
 
     const alias = BEER_ALIASES[normalized.toLowerCase()];
     if (alias) normalized = alias;
-
-    return normalized;
   }
 
-  return name;
+  return normalized;
 }
 
 export async function GET(request: NextRequest) {
@@ -103,7 +104,11 @@ export async function GET(request: NextRequest) {
   >();
 
   for (const item of data || []) {
-    const rawCategory = item.category || inventoryCategoryMap.get(item.name) || "Uncategorized";
+    const baseName = item.name.replace(/\s*\(Happy Hour\)\s*$/i, "").trim();
+    const rawCategory = item.category
+      || inventoryCategoryMap.get(item.name)
+      || inventoryCategoryMap.get(baseName)
+      || "Uncategorized";
     const canonicalName = normalizeItemName(item.name, rawCategory);
     const size = item.size || null;
     const key = `${canonicalName}||${size}`;
