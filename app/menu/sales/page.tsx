@@ -115,7 +115,7 @@ function SortIndicator({ field, sortField, sortDirection }: { field: SortField; 
 }
 
 export default function MenuSalesPage() {
-  const [activePreset, setActivePreset] = useState<DatePreset>("today");
+  const [activePreset, setActivePreset] = useState<DatePreset>("past_week");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [items, setItems] = useState<MenuSaleItem[]>([]);
