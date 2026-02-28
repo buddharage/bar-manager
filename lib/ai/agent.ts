@@ -7,6 +7,12 @@ import {
 import { createServerClient } from "@/lib/supabase/server";
 import { findSimilarChunks } from "@/lib/ai/embeddings";
 import { searchMessages, getMessageContent, processInBatches } from "@/lib/integrations/google-client";
+import {
+  getCachedToolResult,
+  setCachedToolResult,
+  createTokenUsage,
+  type TokenUsage,
+} from "@/lib/ai/token-cache";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -142,8 +148,17 @@ const tools: Tool[] = [
 // Tool execution handlers
 async function executeTool(
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  usage?: TokenUsage
 ): Promise<unknown> {
+  // Check tool result cache (skips live-data tools like search_gmail)
+  const cached = getCachedToolResult(name, args);
+  if (cached !== undefined) {
+    if (usage) usage.toolCallsCached++;
+    return cached;
+  }
+  if (usage) usage.toolCallsExecuted++;
+
   const supabase = createServerClient();
 
   switch (name) {
@@ -163,12 +178,11 @@ async function executeTool(
       const { data, error } = await query;
       if (error) throw error;
 
-      if (args.low_stock_only && data) {
-        return data.filter(
-          (item) => item.par_level && item.current_stock <= item.par_level
-        );
-      }
-      return data;
+      const result = args.low_stock_only && data
+        ? data.filter((item) => item.par_level && item.current_stock <= item.par_level)
+        : data;
+      setCachedToolResult(name, args, result);
+      return result;
     }
 
     case "query_sales": {
@@ -180,6 +194,7 @@ async function executeTool(
         .order("date");
 
       if (error) throw error;
+      setCachedToolResult(name, args, data);
       return data;
     }
 
@@ -204,10 +219,12 @@ async function executeTool(
       const sortBy = (args.sort_by as string) || "quantity";
       const limit = (args.limit as number) || 10;
 
-      return Array.from(grouped.entries())
-        .map(([name, stats]) => ({ name, ...stats }))
+      const result = Array.from(grouped.entries())
+        .map(([itemName, stats]) => ({ name: itemName, ...stats }))
         .sort((a, b) => b[sortBy as "quantity" | "revenue"] - a[sortBy as "quantity" | "revenue"])
         .slice(0, limit);
+      setCachedToolResult(name, args, result);
+      return result;
     }
 
     case "query_alerts": {
@@ -223,6 +240,7 @@ async function executeTool(
 
       const { data, error } = await query;
       if (error) throw error;
+      setCachedToolResult(name, args, data);
       return data;
     }
 
@@ -230,14 +248,21 @@ async function executeTool(
       const limit = (args.limit as number) || 5;
       const query = args.query as string;
 
-      const chunks = await findSimilarChunks(query, limit);
+      const embStats = usage ? { cached: 0, computed: 0 } : undefined;
+      const chunks = await findSimilarChunks(query, limit, undefined, embStats);
+      if (usage && embStats) {
+        usage.embeddingsCached += embStats.cached;
+        usage.embeddingsComputed += embStats.computed;
+      }
 
-      return chunks.map((chunk) => ({
+      const result = chunks.map((chunk) => ({
         title: chunk.title || "Untitled",
         folder: chunk.folder || "",
         content: chunk.content,
         similarity: Math.round(chunk.similarity * 100) + "%",
       }));
+      setCachedToolResult(name, args, result);
+      return result;
     }
 
     case "search_gmail": {
@@ -270,6 +295,7 @@ async function executeTool(
         3
       );
 
+      // search_gmail is not cached (always live) — setCachedToolResult is a no-op for it
       return results;
     }
 
@@ -283,16 +309,24 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface ChatResult {
+  response: string;
+  usage: TokenUsage;
+}
+
 export async function chat(
   messages: ChatMessage[]
-): Promise<string> {
+): Promise<ChatResult> {
+  const usage = createTokenUsage();
+  const embeddingStats = { cached: 0, computed: 0 };
   const lastMessage = messages[messages.length - 1];
 
   // ── Auto-RAG: retrieve relevant Drive document chunks ──
   let systemInstruction = BASE_SYSTEM_INSTRUCTION;
 
   try {
-    const chunks = await findSimilarChunks(lastMessage.content, 5, 0.35);
+    const chunks = await findSimilarChunks(lastMessage.content, 5, 0.35, embeddingStats);
+    usage.ragCacheHit = embeddingStats.cached > 0;
 
     if (chunks.length > 0) {
       systemInstruction += "\n\n─── RELEVANT DOCUMENTS FROM GOOGLE DRIVE ───";
@@ -322,6 +356,19 @@ export async function chat(
 
   let result: GenerateContentResult = await chatSession.sendMessage(lastMessage.content);
 
+  // Accumulate token usage from Gemini response metadata
+  function trackTokens(r: GenerateContentResult) {
+    const meta = r.response.usageMetadata;
+    if (meta) {
+      usage.promptTokens += meta.promptTokenCount ?? 0;
+      usage.completionTokens += meta.candidatesTokenCount ?? 0;
+      usage.totalTokens += meta.totalTokenCount ?? 0;
+      usage.cachedContentTokens += meta.cachedContentTokenCount ?? 0;
+    }
+  }
+
+  trackTokens(result);
+
   // Handle tool calls in a loop (Gemini may call multiple tools)
   while (result.response.candidates?.[0]?.content?.parts?.some((p) => p.functionCall)) {
     const functionCalls = result.response.candidates[0].content.parts.filter(
@@ -332,7 +379,11 @@ export async function chat(
       functionCalls.map(async (part) => {
         const fc = part.functionCall!;
         try {
-          const toolResult = await executeTool(fc.name, fc.args as Record<string, unknown>);
+          const toolResult = await executeTool(
+            fc.name,
+            fc.args as Record<string, unknown>,
+            usage
+          );
           return {
             functionResponse: {
               name: fc.name,
@@ -351,9 +402,13 @@ export async function chat(
     );
 
     result = await chatSession.sendMessage(toolResults);
+    trackTokens(result);
   }
 
-  return result.response.text();
+  usage.embeddingsCached = embeddingStats.cached;
+  usage.embeddingsComputed = embeddingStats.computed;
+
+  return { response: result.response.text(), usage };
 }
 
 // Specialized: generate inventory reorder suggestions

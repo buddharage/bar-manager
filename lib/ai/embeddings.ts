@@ -3,6 +3,13 @@
 
 import { GoogleGenerativeAI, type EmbedContentRequest } from "@google/generative-ai";
 import { createServerClient } from "@/lib/supabase/server";
+import {
+  getCachedEmbedding,
+  setCachedEmbedding,
+  getCachedRAG,
+  setCachedRAG,
+  type CachedChunk,
+} from "@/lib/ai/token-cache";
 
 // The SDK type doesn't yet include outputDimensionality, but the API supports it
 type EmbedRequest = EmbedContentRequest & { outputDimensionality?: number };
@@ -82,13 +89,27 @@ export function chunkDocument(title: string, content: string): DocumentChunk[] {
 
 /**
  * Embed a single text string. Returns a 768-dimension vector.
+ * Uses an in-memory LRU cache to avoid re-embedding identical queries.
  */
-export async function embedText(text: string): Promise<number[]> {
+export async function embedText(
+  text: string,
+  stats?: { cached: number; computed: number }
+): Promise<number[]> {
+  const cached = getCachedEmbedding(text);
+  if (cached) {
+    if (stats) stats.cached++;
+    return cached;
+  }
+
   const result = await embeddingModel.embedContent({
     content: { role: "user", parts: [{ text }] },
     outputDimensionality: 768,
   } as EmbedRequest);
-  return result.embedding.values;
+
+  const embedding = result.embedding.values;
+  setCachedEmbedding(text, embedding);
+  if (stats) stats.computed++;
+  return embedding;
 }
 
 /**
@@ -170,15 +191,23 @@ export interface ChunkMatch {
 /**
  * Embed a query and find the most similar document chunks.
  * Returns chunks with their similarity score and source document metadata.
+ * Uses an LRU cache to avoid redundant embedding + vector search for repeated queries.
  */
 export async function findSimilarChunks(
   query: string,
   limit = 5,
-  threshold = 0.3
+  threshold = 0.3,
+  stats?: { cached: number; computed: number }
 ): Promise<ChunkMatch[]> {
+  // Check RAG cache first
+  const cachedResult = getCachedRAG(query, limit, threshold);
+  if (cachedResult) {
+    return cachedResult as ChunkMatch[];
+  }
+
   const supabase = createServerClient();
 
-  const queryEmbedding = await embedText(query);
+  const queryEmbedding = await embedText(query, stats);
 
   const { data, error } = await supabase.rpc("match_document_chunks", {
     query_embedding: queryEmbedding,
@@ -206,9 +235,14 @@ export async function findSimilarChunks(
     docMap.set(doc.id, { title: doc.title, folder: doc.metadata?.folder });
   }
 
-  return (data as ChunkMatch[]).map((chunk) => ({
+  const results = (data as ChunkMatch[]).map((chunk) => ({
     ...chunk,
     title: docMap.get(chunk.document_id)?.title,
     folder: docMap.get(chunk.document_id)?.folder,
   }));
+
+  // Cache the results for future identical queries
+  setCachedRAG(query, limit, threshold, results as CachedChunk[]);
+
+  return results;
 }

@@ -9,9 +9,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Messages required" }, { status: 400 });
     }
 
-    const response = await chat(messages);
+    const { response, usage } = await chat(messages);
 
-    return NextResponse.json({ response });
+    return NextResponse.json({ response, usage });
   } catch (error) {
     console.error("AI chat error:", error);
     return NextResponse.json(
