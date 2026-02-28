@@ -28,11 +28,18 @@ type SortField = "name" | "quantity" | "revenue";
 type SortDirection = "asc" | "desc";
 type GroupBy = "none" | "category";
 
+interface SubItem {
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
 interface MenuSaleItem {
   name: string;
   category: string;
   quantity: number;
   revenue: number;
+  subItems?: SubItem[];
 }
 
 interface SalesSummary {
@@ -117,6 +124,16 @@ export default function MenuSalesPage() {
   const [sortField, setSortField] = useState<SortField>("quantity");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (name: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   const fetchSales = useCallback(
     async (startDate: string | null, endDate: string | null) => {
@@ -393,37 +410,89 @@ export default function MenuSalesPage() {
                             </TableCell>
                           </TableRow>
                           {groupItems.map((item, idx) => (
-                            <TableRow key={item.name}>
-                              <TableCell className="text-muted-foreground pl-6">
-                                {idx + 1}
-                              </TableCell>
-                              <TableCell className="font-medium pl-6">
-                                {item.name}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {item.quantity.toLocaleString()}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(item.revenue)}
-                              </TableCell>
-                            </TableRow>
+                            <Fragment key={item.name}>
+                              <TableRow
+                                className={item.subItems ? "cursor-pointer" : undefined}
+                                onClick={item.subItems ? () => toggleExpanded(item.name) : undefined}
+                              >
+                                <TableCell className="text-muted-foreground pl-6">
+                                  {idx + 1}
+                                </TableCell>
+                                <TableCell className="font-medium pl-6">
+                                  {item.subItems && (
+                                    <span className="mr-1 inline-block w-4 text-muted-foreground">
+                                      {expandedItems.has(item.name) ? "\u25BE" : "\u25B8"}
+                                    </span>
+                                  )}
+                                  {item.name}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {item.quantity.toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {formatCurrency(item.revenue)}
+                                </TableCell>
+                              </TableRow>
+                              {item.subItems && expandedItems.has(item.name) &&
+                                item.subItems.map((sub) => (
+                                  <TableRow key={sub.name} className="bg-muted/30">
+                                    <TableCell />
+                                    <TableCell className="pl-12 text-sm text-muted-foreground">
+                                      {sub.name}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm text-muted-foreground">
+                                      {sub.quantity.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm text-muted-foreground">
+                                      {formatCurrency(sub.revenue)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                            </Fragment>
                           ))}
                         </Fragment>
                       );
                     })
                   : sortedItems.map((item, index) => (
-                      <TableRow key={item.name}>
-                        <TableCell className="text-muted-foreground">
-                          {index + 1}
-                        </TableCell>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell className="text-right">
-                          {item.quantity.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(item.revenue)}
-                        </TableCell>
-                      </TableRow>
+                      <Fragment key={item.name}>
+                        <TableRow
+                          className={item.subItems ? "cursor-pointer" : undefined}
+                          onClick={item.subItems ? () => toggleExpanded(item.name) : undefined}
+                        >
+                          <TableCell className="text-muted-foreground">
+                            {index + 1}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {item.subItems && (
+                              <span className="mr-1 inline-block w-4 text-muted-foreground">
+                                {expandedItems.has(item.name) ? "\u25BE" : "\u25B8"}
+                              </span>
+                            )}
+                            {item.name}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {item.quantity.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(item.revenue)}
+                          </TableCell>
+                        </TableRow>
+                        {item.subItems && expandedItems.has(item.name) &&
+                          item.subItems.map((sub) => (
+                            <TableRow key={sub.name} className="bg-muted/30">
+                              <TableCell />
+                              <TableCell className="pl-10 text-sm text-muted-foreground">
+                                {sub.name}
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">
+                                {sub.quantity.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">
+                                {formatCurrency(sub.revenue)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </Fragment>
                     ))}
               </TableBody>
             </Table>
