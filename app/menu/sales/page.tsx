@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,13 @@ type DatePreset =
   | "all_time"
   | "custom";
 
+type SortField = "name" | "quantity" | "revenue";
+type SortDirection = "asc" | "desc";
+type GroupBy = "none" | "category";
+
 interface MenuSaleItem {
   name: string;
+  category: string;
   quantity: number;
   revenue: number;
 }
@@ -90,6 +95,17 @@ const presets: { key: DatePreset; label: string }[] = [
   { key: "custom", label: "Custom" },
 ];
 
+function SortIndicator({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) {
+  if (sortField !== field) {
+    return <span className="ml-1 text-muted-foreground/40">{"\u2195"}</span>;
+  }
+  return (
+    <span className="ml-1">
+      {sortDirection === "asc" ? "\u2191" : "\u2193"}
+    </span>
+  );
+}
+
 export default function MenuSalesPage() {
   const [activePreset, setActivePreset] = useState<DatePreset>("today");
   const [customStart, setCustomStart] = useState("");
@@ -98,6 +114,9 @@ export default function MenuSalesPage() {
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>("quantity");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [groupBy, setGroupBy] = useState<GroupBy>("none");
 
   const fetchSales = useCallback(
     async (startDate: string | null, endDate: string | null) => {
@@ -142,6 +161,50 @@ export default function MenuSalesPage() {
     if (!customStart || !customEnd) return;
     fetchSales(customStart, customEnd);
   };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection(field === "name" ? "asc" : "desc");
+    }
+  };
+
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "name":
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case "quantity":
+          cmp = a.quantity - b.quantity;
+          break;
+        case "revenue":
+          cmp = a.revenue - b.revenue;
+          break;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [items, sortField, sortDirection]);
+
+  const groups = useMemo(() => {
+    if (groupBy === "none") return null;
+
+    const map = new Map<string, MenuSaleItem[]>();
+    for (const item of sortedItems) {
+      const key = item.category || "Uncategorized";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [sortedItems, groupBy]);
+
+  const hasCategories = useMemo(() => {
+    return items.some((item) => item.category && item.category !== "Uncategorized");
+  }, [items]);
 
   return (
     <div className="p-6 space-y-6">
@@ -243,11 +306,24 @@ export default function MenuSalesPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Items Sold</CardTitle>
-            {summary && (
-              <Badge variant="secondary">
-                {summary.uniqueItems} item{summary.uniqueItems !== 1 ? "s" : ""}
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {hasCategories && (
+                <Button
+                  variant={groupBy === "category" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    setGroupBy((g) => (g === "none" ? "category" : "none"))
+                  }
+                >
+                  Group by Category
+                </Button>
+              )}
+              {summary && (
+                <Badge variant="secondary">
+                  {summary.uniqueItems} item{summary.uniqueItems !== 1 ? "s" : ""}
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -262,26 +338,93 @@ export default function MenuSalesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">#</TableHead>
-                  <TableHead>Menu Item</TableHead>
-                  <TableHead className="text-right">Qty Sold</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
+                  <TableHead>
+                    <button
+                      type="button"
+                      className="inline-flex items-center hover:text-foreground transition-colors"
+                      onClick={() => handleSort("name")}
+                    >
+                      Menu Item
+                      <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button
+                      type="button"
+                      className="inline-flex items-center ml-auto hover:text-foreground transition-colors"
+                      onClick={() => handleSort("quantity")}
+                    >
+                      Qty Sold
+                      <SortIndicator field="quantity" sortField={sortField} sortDirection={sortDirection} />
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button
+                      type="button"
+                      className="inline-flex items-center ml-auto hover:text-foreground transition-colors"
+                      onClick={() => handleSort("revenue")}
+                    >
+                      Revenue
+                      <SortIndicator field="revenue" sortField={sortField} sortDirection={sortDirection} />
+                    </button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item, index) => (
-                  <TableRow key={item.name}>
-                    <TableCell className="text-muted-foreground">
-                      {index + 1}
-                    </TableCell>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="text-right">
-                      {item.quantity.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(item.revenue)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {groups
+                  ? groups.map(([category, groupItems]) => {
+                      const groupQty = groupItems.reduce((s, i) => s + i.quantity, 0);
+                      const groupRev = groupItems.reduce((s, i) => s + i.revenue, 0);
+                      return (
+                        <Fragment key={category}>
+                          <TableRow className="bg-muted/50 hover:bg-muted/50">
+                            <TableCell />
+                            <TableCell className="font-semibold">
+                              {category}
+                              <span className="ml-2 text-muted-foreground font-normal text-sm">
+                                ({groupItems.length} item{groupItems.length !== 1 ? "s" : ""})
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {groupQty.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {formatCurrency(groupRev)}
+                            </TableCell>
+                          </TableRow>
+                          {groupItems.map((item, idx) => (
+                            <TableRow key={item.name}>
+                              <TableCell className="text-muted-foreground pl-6">
+                                {idx + 1}
+                              </TableCell>
+                              <TableCell className="font-medium pl-6">
+                                {item.name}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {item.quantity.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(item.revenue)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      );
+                    })
+                  : sortedItems.map((item, index) => (
+                      <TableRow key={item.name}>
+                        <TableCell className="text-muted-foreground">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-right">
+                          {item.quantity.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(item.revenue)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
               </TableBody>
             </Table>
           )}
