@@ -9,7 +9,7 @@ create table document_chunks (
   document_id   bigint not null references documents(id) on delete cascade,
   chunk_index   integer not null,
   content       text not null,
-  embedding     vector(768),  -- Gemini text-embedding-004 produces 768-dim vectors
+  embedding     vector(768),  -- Gemini gemini-embedding-001 with outputDimensionality=768
   created_at    timestamptz default now()
 );
 

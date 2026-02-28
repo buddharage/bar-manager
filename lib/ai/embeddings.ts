@@ -1,11 +1,14 @@
 // Document chunking + Gemini vector embeddings + similarity search
 // Used by the Drive sync pipeline (chunk & embed) and the chat agent (retrieve)
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type EmbedContentRequest } from "@google/generative-ai";
 import { createServerClient } from "@/lib/supabase/server";
 
+// The SDK type doesn't yet include outputDimensionality, but the API supports it
+type EmbedRequest = EmbedContentRequest & { outputDimensionality?: number };
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
 
 // ============================================================
 // Chunking — split document content into overlapping pieces
@@ -81,7 +84,10 @@ export function chunkDocument(title: string, content: string): DocumentChunk[] {
  * Embed a single text string. Returns a 768-dimension vector.
  */
 export async function embedText(text: string): Promise<number[]> {
-  const result = await embeddingModel.embedContent(text);
+  const result = await embeddingModel.embedContent({
+    content: { role: "user", parts: [{ text }] },
+    outputDimensionality: 768,
+  } as EmbedRequest);
   return result.embedding.values;
 }
 
@@ -100,7 +106,8 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     const response = await embeddingModel.batchEmbedContents({
       requests: batch.map((text) => ({
         content: { role: "user", parts: [{ text }] },
-      })),
+        outputDimensionality: 768,
+      } as EmbedRequest)),
     });
     for (const emb of response.embeddings) {
       results.push(emb.values);
