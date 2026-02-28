@@ -31,6 +31,7 @@ type GroupBy = "none" | "category";
 interface MenuSaleItem {
   name: string;
   category: string;
+  size: string | null;
   quantity: number;
   revenue: number;
 }
@@ -348,6 +349,7 @@ export default function MenuSalesPage() {
                       <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
                     </button>
                   </TableHead>
+                  <TableHead>Size</TableHead>
                   <TableHead className="text-right">
                     <button
                       type="button"
@@ -385,6 +387,7 @@ export default function MenuSalesPage() {
                                 ({groupItems.length} item{groupItems.length !== 1 ? "s" : ""})
                               </span>
                             </TableCell>
+                            <TableCell />
                             <TableCell className="text-right font-semibold">
                               {groupQty.toLocaleString()}
                             </TableCell>
@@ -393,12 +396,17 @@ export default function MenuSalesPage() {
                             </TableCell>
                           </TableRow>
                           {groupItems.map((item, idx) => (
-                            <TableRow key={item.name}>
+                            <TableRow key={`${item.name}-${item.size}`}>
                               <TableCell className="text-muted-foreground pl-6">
                                 {idx + 1}
                               </TableCell>
                               <TableCell className="font-medium pl-6">
                                 {item.name}
+                              </TableCell>
+                              <TableCell>
+                                {item.size && (
+                                  <Badge variant="outline">{item.size}</Badge>
+                                )}
                               </TableCell>
                               <TableCell className="text-right">
                                 {item.quantity.toLocaleString()}
@@ -412,11 +420,16 @@ export default function MenuSalesPage() {
                       );
                     })
                   : sortedItems.map((item, index) => (
-                      <TableRow key={item.name}>
+                      <TableRow key={`${item.name}-${item.size}`}>
                         <TableCell className="text-muted-foreground">
                           {index + 1}
                         </TableCell>
                         <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell>
+                          {item.size && (
+                            <Badge variant="outline">{item.size}</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
                           {item.quantity.toLocaleString()}
                         </TableCell>

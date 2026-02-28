@@ -30,33 +30,38 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Fetch category mapping from inventory_items
+  // Aggregate by (name, size) so different sizes are separate rows.
+  // Category comes directly from the order_items row; fall back to
+  // inventory_items only for legacy rows that pre-date migration 003.
+  const grouped = new Map<
+    string,
+    { name: string; category: string; size: string | null; quantity: number; revenue: number }
+  >();
+
+  // Build a fallback name→category map from inventory_items for old rows
   const { data: inventoryItems } = await supabase
     .from("inventory_items")
     .select("name, category");
 
-  const categoryMap = new Map<string, string>();
+  const inventoryCategoryMap = new Map<string, string>();
   for (const inv of inventoryItems || []) {
     if (inv.name && inv.category) {
-      categoryMap.set(inv.name, inv.category);
+      inventoryCategoryMap.set(inv.name, inv.category);
     }
   }
 
-  // Aggregate by menu item name
-  const grouped = new Map<
-    string,
-    { name: string; category: string; quantity: number; revenue: number }
-  >();
-
   for (const item of data || []) {
-    const existing = grouped.get(item.name);
+    const size = item.size || null;
+    const key = `${item.name}||${size}`;
+    const existing = grouped.get(key);
     if (existing) {
       existing.quantity += item.quantity;
       existing.revenue += item.revenue;
     } else {
-      grouped.set(item.name, {
+      grouped.set(key, {
         name: item.name,
-        category: categoryMap.get(item.name) || "Uncategorized",
+        category: item.category || inventoryCategoryMap.get(item.name) || "Uncategorized",
+        size,
         quantity: item.quantity,
         revenue: item.revenue,
       });
