@@ -17,22 +17,23 @@ const BEER_ALIASES: Record<string, string> = {
 };
 
 function normalizeItemName(name: string, category?: string): string {
+  // "(Happy Hour)" is a pricing variant that applies to any category —
+  // strip it universally so happy-hour items aggregate with their base item.
+  let normalized = name.replace(/\s*\(Happy Hour\)\s*$/i, "").trim();
+
   const lowerCat = category?.toLowerCase();
 
   if (lowerCat === "wine" || lowerCat === "beer") {
-    let normalized = name
-      .replace(/\s*\(Happy Hour\)\s*$/i, "")
+    normalized = normalized
       .replace(/\s+and a Shot\s*$/i, "")
       .replace(/\s*&\s*Shot\s*$/i, "")
       .trim();
 
     const alias = BEER_ALIASES[normalized.toLowerCase()];
     if (alias) normalized = alias;
-
-    return normalized;
   }
 
-  return name;
+  return normalized;
 }
 
 export async function GET(request: NextRequest) {

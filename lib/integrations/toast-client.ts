@@ -222,8 +222,17 @@ export async function fetchMenuItemCategoryMap(): Promise<Map<string, string>> {
 }
 
 // Check whether an optionGroup name indicates a size modifier.
+// Toast menus use various naming conventions for size-related modifier
+// groups — match common patterns used in bar / restaurant setups.
 function isSizeOptionGroup(name: string): boolean {
-  return name.toLowerCase().includes("size");
+  const lower = name.toLowerCase();
+  return (
+    lower.includes("size") ||
+    lower.includes("pour") ||
+    lower.includes("glass or") ||
+    lower.includes("single") ||
+    lower.includes("portion")
+  );
 }
 
 // Collect size-related optionGroup GUIDs from a list of optionGroups.
