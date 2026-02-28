@@ -6,17 +6,12 @@ import { verifyToken } from "@/lib/auth/session";
 // Each product can appear in three forms on the Toast menu:
 //   "Item Name"  /  "Item Name (Happy Hour)"  /  "Item Name and a Shot"
 // All three should roll up under the base "Item Name".
+// This applies to specific beers (Miller High Life, Tecate, Corona)
+// and all wine-category items.
 function normalizeItemName(name: string, category?: string): string {
-  const lower = name.toLowerCase();
+  const lowerCat = category?.toLowerCase();
 
-  // Beer variants — name always contains the base product name
-  if (lower.includes("miller high life")) return "Miller High Life";
-  if (lower.includes("tecate")) return "Tecate";
-  if (lower.includes("corona")) return "Corona";
-
-  // Wine variants — strip the (Happy Hour) / and a Shot suffixes so each
-  // wine type (e.g. "Pinot Grigio") keeps its own row.
-  if (category?.toLowerCase() === "wine") {
+  if (lowerCat === "wine" || lowerCat === "beer") {
     return name
       .replace(/\s*\(Happy Hour\)\s*$/i, "")
       .replace(/\s+and a Shot\s*$/i, "")
