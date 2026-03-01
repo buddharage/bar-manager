@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { fetchInventory, fetchMenuItems } from "@/lib/integrations/toast-client";
+import { fetchInventory, fetchAllMenuLookups } from "@/lib/integrations/toast-client";
 import { verifyRequest } from "@/lib/auth/session";
-import { syncOrdersForDate, fetchSharedLookups } from "@/lib/sync/toast-orders";
+import { syncOrdersForDate } from "@/lib/sync/toast-orders";
 
 // Daily Toast sync — called by GitHub Actions cron or manual trigger
 export async function POST(request: NextRequest) {
@@ -27,10 +27,11 @@ export async function POST(request: NextRequest) {
     let totalRecords = 0;
 
     // 1. Sync inventory stock levels (enriched with menu item names)
-    const [stockItems, menuItems, { categoryMap, sizeGroupGuids }] = await Promise.all([
+    // Fetch inventory and menu data in parallel, but only call /menus/v2/menus
+    // once via fetchAllMenuLookups to avoid 429 rate limiting.
+    const [stockItems, { menuItems, categoryMap, sizeGroupGuids }] = await Promise.all([
       fetchInventory(),
-      fetchMenuItems(),
-      fetchSharedLookups(),
+      fetchAllMenuLookups(),
     ]);
 
     // Build a GUID→name lookup from menu data

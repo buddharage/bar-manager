@@ -101,28 +101,48 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.token;
 }
 
+const MAX_RETRIES = 4;
+
 async function toastFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const token = await getAccessToken();
   const restaurantGuid = process.env.TOAST_RESTAURANT_GUID!;
 
-  const response = await fetch(
-    `${process.env.TOAST_API_BASE_URL}${path}`,
-    {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Toast-Restaurant-External-ID": restaurantGuid,
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
-    }
-  );
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    throw new Error(`Toast API ${path}: ${response.status} ${await response.text()}`);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      // Exponential backoff: 2s, 4s, 8s, 16s
+      const delayMs = Math.pow(2, attempt) * 1000;
+      console.warn(`Toast API ${path}: 429 rate limited, retrying in ${delayMs}ms (attempt ${attempt}/${MAX_RETRIES})`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    const response = await fetch(
+      `${process.env.TOAST_API_BASE_URL}${path}`,
+      {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Toast-Restaurant-External-ID": restaurantGuid,
+          "Content-Type": "application/json",
+          ...options?.headers,
+        },
+      }
+    );
+
+    if (response.status === 429) {
+      lastError = new Error(`Toast API ${path}: ${response.status} ${await response.text()}`);
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Toast API ${path}: ${response.status} ${await response.text()}`);
+    }
+
+    return response.json();
   }
 
-  return response.json();
+  throw lastError!;
 }
 
 // Fetch orders for a date range (ISO strings)
@@ -293,6 +313,35 @@ export async function fetchSizeOptionGroupGuids(): Promise<Set<string>> {
     collectSizeGuidsFromGroups(groups, sizeGuids);
   }
   return sizeGuids;
+}
+
+// Fetch /menus/v2/menus once and derive all lookups in a single pass.
+// Avoids multiple requests to the same endpoint which triggers 429 rate limiting.
+export async function fetchAllMenuLookups(): Promise<{
+  menuItems: ToastMenuItem[];
+  categoryMap: Map<string, string>;
+  sizeGroupGuids: Set<string>;
+}> {
+  const data = await toastFetch<unknown>("/menus/v2/menus");
+  const menus = normalizeToArray<Record<string, unknown>>(data);
+
+  const menuItems: ToastMenuItem[] = [];
+  const sizeGuids = new Set<string>();
+
+  for (const menu of menus) {
+    const groups = Array.isArray(menu.menuGroups) ? menu.menuGroups : [];
+    collectMenuItems(groups, menuItems);
+    collectSizeGuidsFromGroups(groups, sizeGuids);
+  }
+
+  const categoryMap = new Map<string, string>();
+  for (const item of menuItems) {
+    if (item.menuGroup?.name) {
+      categoryMap.set(item.guid, item.menuGroup.name);
+    }
+  }
+
+  return { menuItems, categoryMap, sizeGroupGuids: sizeGuids };
 }
 
 export type { ToastOrder, ToastStockItem, ToastMenuItem };

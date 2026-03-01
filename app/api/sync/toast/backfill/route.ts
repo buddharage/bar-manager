@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { verifyRequest } from "@/lib/auth/session";
-import { syncOrdersForDate, fetchSharedLookups } from "@/lib/sync/toast-orders";
+import { fetchAllMenuLookups } from "@/lib/integrations/toast-client";
+import { syncOrdersForDate } from "@/lib/sync/toast-orders";
 
 // Maximum number of days to backfill in a single request to avoid timeouts
 const MAX_DAYS = 90;
@@ -83,8 +84,8 @@ export async function POST(request: NextRequest) {
     .single();
 
   try {
-    // Fetch shared lookups once for all days
-    const { categoryMap, sizeGroupGuids } = await fetchSharedLookups();
+    // Fetch menu data once for all days (single /menus/v2/menus call)
+    const { categoryMap, sizeGroupGuids } = await fetchAllMenuLookups();
 
     let totalRecords = 0;
     let totalOrders = 0;
