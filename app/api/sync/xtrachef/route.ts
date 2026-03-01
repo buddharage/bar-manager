@@ -9,7 +9,7 @@ import { syncXtrachefRecipes } from "@/lib/sync/xtrachef-recipes";
  *
  * Triggers a full xtraCHEF recipe sync by calling the internal API directly.
  * Requires XTRACHEF_TENANT_ID, XTRACHEF_LOCATION_ID env vars and
- * an xtraCHEF session cookie stored in the `settings` table.
+ * an xtraCHEF Bearer token stored in the `settings` table.
  */
 export async function POST(request: NextRequest) {
   if (!(await verifyRequest(request))) {
@@ -18,16 +18,16 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServerClient();
 
-  // Load xtraCHEF auth cookie from settings
-  const { data: cookieSetting } = await supabase
+  // Load xtraCHEF auth token from settings
+  const { data: tokenSetting } = await supabase
     .from("settings")
     .select("value")
-    .eq("key", "xtrachef_cookie")
+    .eq("key", "xtrachef_token")
     .single();
 
-  if (!cookieSetting?.value) {
+  if (!tokenSetting?.value) {
     return NextResponse.json(
-      { error: "xtraCHEF session cookie not configured. Paste it in Settings." },
+      { error: "xtraCHEF Bearer token not configured. Paste it in Settings." },
       { status: 400 },
     );
   }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const client = new XtrachefClient({
       tenantId,
       locationId,
-      cookie: cookieSetting.value,
+      token: tokenSetting.value,
     });
 
     const result = await syncXtrachefRecipes(supabase, client);
@@ -134,17 +134,17 @@ export async function GET(request: NextRequest) {
     .from("ingredients")
     .select("*", { count: "exact", head: true });
 
-  // Check if cookie is configured
-  const { data: cookieSetting } = await supabase
+  // Check if token is configured
+  const { data: tokenSetting } = await supabase
     .from("settings")
     .select("value")
-    .eq("key", "xtrachef_cookie")
+    .eq("key", "xtrachef_token")
     .single();
 
   return NextResponse.json({
     lastSync,
     recipeCount: recipeCount || 0,
     ingredientCount: ingredientCount || 0,
-    hasCookie: !!cookieSetting?.value,
+    hasToken: !!tokenSetting?.value,
   });
 }

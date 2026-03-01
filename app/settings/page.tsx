@@ -22,7 +22,7 @@ interface XtrachefStatus {
   lastSync: SyncLogEntry | null;
   recipeCount: number;
   ingredientCount: number;
-  hasCookie: boolean;
+  hasToken: boolean;
 }
 
 function SettingsContent() {
@@ -33,8 +33,8 @@ function SettingsContent() {
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [xtrachefStatus, setXtrachefStatus] = useState<XtrachefStatus | null>(null);
-  const [xtrachefCookie, setXtrachefCookie] = useState("");
-  const [savingCookie, setSavingCookie] = useState(false);
+  const [xtrachefToken, setXtrachefToken] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
   const [syncingXtrachef, setSyncingXtrachef] = useState(false);
   const searchParams = useSearchParams();
   const supabaseRef = useRef(createClient());
@@ -154,21 +154,21 @@ function SettingsContent() {
     }
   }
 
-  async function saveXtrachefCookie() {
-    if (!xtrachefCookie.trim()) return;
-    setSavingCookie(true);
+  async function saveXtrachefToken() {
+    if (!xtrachefToken.trim()) return;
+    setSavingToken(true);
     try {
       const supabase = createClient();
       await supabase
         .from("settings")
-        .upsert({ key: "xtrachef_cookie", value: xtrachefCookie.trim() }, { onConflict: "key" });
-      setXtrachefCookie("");
+        .upsert({ key: "xtrachef_token", value: xtrachefToken.trim() }, { onConflict: "key" });
+      setXtrachefToken("");
       loadXtrachefStatus();
-      alert("Session cookie saved.");
+      alert("Bearer token saved.");
     } catch (err) {
-      alert(`Failed to save cookie: ${err}`);
+      alert(`Failed to save token: ${err}`);
     }
-    setSavingCookie(false);
+    setSavingToken(false);
   }
 
   async function triggerXtrachefSync() {
@@ -292,14 +292,14 @@ function SettingsContent() {
           <div className="flex items-center justify-between">
             <CardTitle>xtraCHEF Recipes</CardTitle>
             <div className="flex items-center gap-2">
-              {xtrachefStatus?.hasCookie ? (
-                <Badge variant="default">Cookie saved</Badge>
+              {xtrachefStatus?.hasToken ? (
+                <Badge variant="default">Token saved</Badge>
               ) : (
-                <Badge variant="secondary">No cookie</Badge>
+                <Badge variant="secondary">No token</Badge>
               )}
               <Button
                 onClick={triggerXtrachefSync}
-                disabled={syncingXtrachef || !xtrachefStatus?.hasCookie}
+                disabled={syncingXtrachef || !xtrachefStatus?.hasToken}
               >
                 {syncingXtrachef ? "Syncing..." : "Sync Recipes"}
               </Button>
@@ -309,7 +309,7 @@ function SettingsContent() {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Sync recipes, prep recipes, and ingredients from xtraCHEF.
-            Calls the internal xtraCHEF API using your session cookie.
+            Calls the internal xtraCHEF API using your Bearer token.
           </p>
 
           {xtrachefStatus && (
@@ -337,11 +337,11 @@ function SettingsContent() {
 
           <div className="space-y-3">
             <div>
-              <label className="text-sm font-medium" htmlFor="xc-cookie">
-                Session cookie
+              <label className="text-sm font-medium" htmlFor="xc-token">
+                Bearer token
               </label>
               <div className="rounded border bg-muted/50 p-3 text-xs text-muted-foreground mb-2 space-y-1">
-                <p className="font-medium text-foreground text-sm">How to get your cookie:</p>
+                <p className="font-medium text-foreground text-sm">How to get your token:</p>
                 <ol className="list-decimal list-inside space-y-0.5">
                   <li>Log into <a href="https://app.sa.toasttab.com" target="_blank" rel="noopener noreferrer" className="underline">app.sa.toasttab.com</a></li>
                   <li>Open DevTools (<kbd className="rounded bg-muted px-1 py-0.5">F12</kbd> or <kbd className="rounded bg-muted px-1 py-0.5">Cmd+Opt+I</kbd>)</li>
@@ -349,28 +349,28 @@ function SettingsContent() {
                   <li>Navigate to Recipes in xtraCHEF</li>
                   <li>In Network, find any request to <code className="rounded bg-muted px-1">ecs-api-prod.sa.toasttab.com</code></li>
                   <li>Click the request, scroll to <strong>Request Headers</strong></li>
-                  <li>Copy the full <code className="rounded bg-muted px-1">Cookie</code> header value and paste it below</li>
+                  <li>Copy the <code className="rounded bg-muted px-1">Authorization</code> header value (starts with <code className="rounded bg-muted px-1">Bearer</code>) and paste it below</li>
                 </ol>
                 <p className="pt-1">
-                  The cookie expires when your Toast session ends.
+                  The token expires when your Toast session ends.
                   Re-paste it here whenever sync returns a 401 error.
                 </p>
               </div>
               <div className="flex gap-2">
                 <input
-                  id="xc-cookie"
+                  id="xc-token"
                   type="password"
                   className="flex-1 rounded border bg-background px-3 py-1.5 text-sm"
-                  placeholder="Paste cookie value..."
-                  value={xtrachefCookie}
-                  onChange={(e) => setXtrachefCookie(e.target.value)}
+                  placeholder="Paste Bearer token value..."
+                  value={xtrachefToken}
+                  onChange={(e) => setXtrachefToken(e.target.value)}
                 />
                 <Button
                   variant="outline"
-                  onClick={saveXtrachefCookie}
-                  disabled={savingCookie || !xtrachefCookie.trim()}
+                  onClick={saveXtrachefToken}
+                  disabled={savingToken || !xtrachefToken.trim()}
                 >
-                  {savingCookie ? "Saving..." : "Save"}
+                  {savingToken ? "Saving..." : "Save"}
                 </Button>
               </div>
             </div>

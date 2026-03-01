@@ -2,7 +2,7 @@
 --
 -- xtraCHEF has no public API. Data is fetched by calling the same endpoints
 -- the xtraCHEF SPA (app.sa.toasttab.com) uses, authenticated with the
--- user's session cookie.
+-- user's Bearer token from the Authorization header.
 --
 -- API endpoints (host: ecs-api-prod.sa.toasttab.com):
 --   Summary: /api.recipes-query/api/1.0/recipes-v2/tenants/{t}/location/{l}/recipe-summary
@@ -11,7 +11,7 @@
 -- Env vars required:
 --   XTRACHEF_TENANT_ID    — numeric, from the API URL (e.g. 39494)
 --   XTRACHEF_LOCATION_ID  — numeric, from the API URL (e.g. 12802)
---   XTRACHEF_COOKIE       — session cookie (or set via Settings page UI)
+--   XTRACHEF_TOKEN        — Bearer token (or set via Settings page UI)
 
 -- ============================================================
 -- Recipes (cocktails, dishes, prep batches)

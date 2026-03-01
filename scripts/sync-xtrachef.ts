@@ -15,7 +15,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY  — Supabase service role key (not anon key)
  *   XTRACHEF_TENANT_ID         — Your xtraCHEF tenant ID (see below)
  *   XTRACHEF_LOCATION_ID       — Your xtraCHEF location ID (see below)
- *   XTRACHEF_COOKIE            — Session cookie (or stored via Settings page)
+ *   XTRACHEF_TOKEN             — Bearer token (or stored via Settings page)
  *
  * How to find your Tenant ID and Location ID:
  *   1. Log into https://app.sa.toasttab.com
@@ -26,13 +26,13 @@
  *      .../recipes-v2/tenants/{TENANT_ID}/location/{LOCATION_ID}/recipe-summary
  *   5. Copy the numeric values from that URL
  *
- * How to get your session cookie:
+ * How to get your Bearer token:
  *   1. In the same DevTools Network tab, click the recipe-summary request
- *   2. Under "Request Headers", find the "Cookie:" header
- *   3. Copy the entire value (it's a long string)
- *   4. Set it as XTRACHEF_COOKIE in .env.local, or paste it in the
- *      Settings page under "xtraCHEF Recipes → Session cookie"
- *   Note: The cookie expires when your browser session ends.
+ *   2. Under "Request Headers", find the "Authorization:" header
+ *   3. Copy the value (starts with "Bearer ...")
+ *   4. Set it as XTRACHEF_TOKEN in .env.local, or paste it in the
+ *      Settings page under "xtraCHEF Recipes → Bearer token"
+ *   Note: The token expires when your Toast session ends.
  */
 
 import "dotenv/config";
@@ -69,30 +69,30 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-async function getCookie(): Promise<string> {
+async function getToken(): Promise<string> {
   // Try env var first
-  if (process.env.XTRACHEF_COOKIE) {
-    return process.env.XTRACHEF_COOKIE;
+  if (process.env.XTRACHEF_TOKEN) {
+    return process.env.XTRACHEF_TOKEN;
   }
 
   // Fall back to settings table
   const { data } = await supabase
     .from("settings")
     .select("value")
-    .eq("key", "xtrachef_cookie")
+    .eq("key", "xtrachef_token")
     .single();
 
   if (data?.value) return data.value;
 
   console.error(
-    "No xtraCHEF session cookie found.\n" +
-    "Set XTRACHEF_COOKIE in .env.local or paste it in the Settings page.\n\n" +
-    "To get your cookie:\n" +
+    "No xtraCHEF Bearer token found.\n" +
+    "Set XTRACHEF_TOKEN in .env.local or paste it in the Settings page.\n\n" +
+    "To get your token:\n" +
     "  1. Log into app.sa.toasttab.com\n" +
     "  2. Open DevTools > Network tab\n" +
     "  3. Navigate to Recipes\n" +
     "  4. Find a request to ecs-api-prod.sa.toasttab.com\n" +
-    "  5. Copy the full Cookie header value",
+    "  5. Copy the Authorization header value (starts with 'Bearer ...')",
   );
   process.exit(1);
 }
@@ -100,7 +100,7 @@ async function getCookie(): Promise<string> {
 async function main() {
   console.log("Starting xtraCHEF recipe sync...\n");
 
-  const cookie = await getCookie();
+  const token = await getToken();
 
   // Create sync log
   const { data: syncLog } = await supabase
@@ -110,7 +110,7 @@ async function main() {
     .single();
 
   try {
-    const client = new XtrachefClient({ tenantId: tenantId!, locationId: locationId!, cookie });
+    const client = new XtrachefClient({ tenantId: tenantId!, locationId: locationId!, token });
 
     const result = await syncXtrachefRecipes(supabase, client, {
       onProgress: (done, total) => {

@@ -5,10 +5,10 @@
  * These endpoints are used by the xtraCHEF SPA at app.sa.toasttab.com
  * (visible in browser DevTools → Network tab when navigating to Recipes).
  *
- * Auth: Requires a session cookie from a logged-in xtraCHEF browser session.
- * The user copies the Cookie header value from any request to
+ * Auth: Requires a Bearer token from a logged-in xtraCHEF browser session.
+ * The user copies the Authorization header value from any request to
  * ecs-api-prod.sa.toasttab.com in browser DevTools and pastes it
- * into the bar-manager Settings page (or XTRACHEF_COOKIE env var).
+ * into the bar-manager Settings page (or XTRACHEF_TOKEN env var).
  *
  * Endpoints (base: ecs-api-prod.sa.toasttab.com):
  *   Recipe list:
@@ -144,18 +144,23 @@ export interface FullRecipe {
 export class XtrachefClient {
   private tenantId: string;
   private locationId: string;
-  private cookie: string;
+  private token: string;
 
-  constructor(opts: { tenantId: string; locationId: string; cookie: string }) {
+  constructor(opts: { tenantId: string; locationId: string; token: string }) {
     this.tenantId = opts.tenantId;
     this.locationId = opts.locationId;
-    this.cookie = opts.cookie;
+    this.token = opts.token;
   }
 
   private async apiFetch<T>(url: string): Promise<T> {
+    // The token may already include "Bearer " prefix — normalize it
+    const bearer = this.token.startsWith("Bearer ")
+      ? this.token
+      : `Bearer ${this.token}`;
+
     const res = await fetch(url, {
       headers: {
-        cookie: this.cookie,
+        authorization: bearer,
         accept: "application/json",
       },
     });
