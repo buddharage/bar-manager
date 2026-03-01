@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,15 +21,46 @@ interface SyncLogEntry {
 function SettingsContent() {
   const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const searchParams = useSearchParams();
+  const supabaseRef = useRef(createClient());
+
+  const loadSyncLogs = useCallback(async () => {
+    const { data } = await supabaseRef.current
+      .from("sync_logs")
+      .select("*")
+      .order("started_at", { ascending: false })
+      .limit(10);
+    setSyncLogs((data as SyncLogEntry[]) || []);
+  }, []);
 
   useEffect(() => {
     loadSyncLogs();
     checkGoogleConnection();
-  }, []);
+  }, [loadSyncLogs]);
+
+  // Poll sync logs every 3s while a sync is in progress
+  useEffect(() => {
+    if (!syncing && !syncingGoogle) return;
+    const interval = setInterval(loadSyncLogs, 3000);
+    return () => clearInterval(interval);
+  }, [syncing, syncingGoogle, loadSyncLogs]);
+
+  // Subscribe to sync_logs changes via Supabase Realtime for external syncs
+  useEffect(() => {
+    const channel = supabaseRef.current
+      .channel("sync_logs_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sync_logs" },
+        () => { loadSyncLogs(); }
+      )
+      .subscribe();
+    return () => { supabaseRef.current.removeChannel(channel); };
+  }, [loadSyncLogs]);
 
   // Show connection result from OAuth callback
   useEffect(() => {
@@ -53,52 +84,43 @@ function SettingsContent() {
     }
   }
 
-  async function loadSyncLogs() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("sync_logs")
-      .select("*")
-      .order("started_at", { ascending: false })
-      .limit(10);
-    setSyncLogs((data as SyncLogEntry[]) || []);
-  }
-
   async function triggerSync() {
     setSyncing(true);
+    setSyncResult(null);
     try {
       const res = await fetch("/api/sync/toast", { method: "POST" });
       const data = await res.json();
       if (data.error) {
-        alert(`Sync failed: ${data.error}`);
+        setSyncResult({ type: "error", message: `Sync failed: ${data.error}` });
       } else {
-        alert(`Sync complete: ${data.records_synced} records synced`);
+        setSyncResult({ type: "success", message: `Sync complete: ${data.records_synced} records synced` });
       }
-      loadSyncLogs();
     } catch (err) {
-      alert(`Sync error: ${err}`);
+      setSyncResult({ type: "error", message: `Sync error: ${err}` });
     }
+    await loadSyncLogs();
     setSyncing(false);
   }
 
   async function triggerGoogleSync() {
     setSyncingGoogle(true);
-
+    setSyncResult(null);
     try {
       const res = await fetch("/api/sync/google", { method: "POST" });
       const data = await res.json();
 
       if (data.error) {
-        alert(`Drive sync failed: ${data.error}`);
+        setSyncResult({ type: "error", message: `Drive sync failed: ${data.error}` });
       } else {
         const parts = [`${data.records_synced} files synced`];
         if (data.records_embedded > 0) parts.push(`${data.records_embedded} embedded`);
         if (data.records_deleted > 0) parts.push(`${data.records_deleted} removed`);
-        alert(`Drive sync complete: ${parts.join(", ")}`);
+        setSyncResult({ type: "success", message: `Drive sync complete: ${parts.join(", ")}` });
       }
-      loadSyncLogs();
     } catch (err) {
-      alert(`Google sync error: ${err}`);
+      setSyncResult({ type: "error", message: `Google sync error: ${err}` });
     }
+    await loadSyncLogs();
     setSyncingGoogle(false);
   }
 
@@ -212,7 +234,18 @@ function SettingsContent() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {syncResult && (
+            <div
+              className={`rounded border p-3 text-sm ${
+                syncResult.type === "success"
+                  ? "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
+                  : "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
+              }`}
+            >
+              {syncResult.message}
+            </div>
+          )}
           {syncLogs.length === 0 ? (
             <p className="text-sm text-muted-foreground">No sync history yet.</p>
           ) : (
