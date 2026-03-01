@@ -1,0 +1,71 @@
+-- Backfill creator and created_at_label for existing cocktail recipes.
+--
+-- These user-editable fields were added in migration 007 but never populated
+-- for the original recipe set. This migration fills them in based on the
+-- bar's historical records. Scoped to the "Cocktails" recipe group only.
+
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'A Shade of Jade' and recipe_group = 'Cocktails';
+update recipes set creator = 'Gillian', created_at_label = '2025 Spring' where name = 'Amulet' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'Ace of Coins' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2023 Fall' where name = 'Bloodmoon' and recipe_group = 'Cocktails';
+update recipes set creator = 'Austiin', created_at_label = '2024 Spring' where name = 'Baby Lock the Door and Turn Out the Lights' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'Bishop''s Absolution' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2022 Fall' where name = 'Calypso''s Secret' and recipe_group = 'Cocktails';
+update recipes set creator = 'Jocelyn', created_at_label = '2023 Fall' where name = 'Bruja''s Brew' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2025 Spring' where name = 'Devil Fruit' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2023 Fall' where name = 'Celosa Luna' and recipe_group = 'Cocktails';
+update recipes set creator = 'Nino', created_at_label = '2023 Spring' where name = 'Cryptide' and recipe_group = 'Cocktails';
+update recipes set creator = 'Gillian', created_at_label = '2023 Spring' where name = 'Dia de Sandia' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2024 Fall' where name = 'E.S.P. (Espresso Spirit Potion)' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2023 Spring' where name = 'Empress' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2025 Fall' where name = 'Falling Leaves' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2022 Original' where name = 'Espresso Martini (St. George style)' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ette', created_at_label = '2023 Fall' where name = 'ETTE - Eli''s Covent' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ette', created_at_label = '2023 Fall' where name = 'ETTE - Garden Ette-Quette' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'Fantastic Mystic Fox' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2023 Spring' where name = 'Glinda' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2024 Summer' where name = 'Golden Hour' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2025 Fall' where name = 'Holy Molé' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2024 Fall' where name = 'Kat''s Kiss Shot' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2024 Winter' where name = 'Jungle Bird' and recipe_group = 'Cocktails';
+update recipes set creator = 'Austin', created_at_label = '2023 Fall' where name = 'King Ink' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'L''affaire des Poisons' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2022 Fall' where name = 'La Limpieza' and recipe_group = 'Cocktails';
+update recipes set creator = 'Gillian', created_at_label = '2025 Fall' where name = 'Lovespell' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2024 Spring' where name = 'Crystal Lake' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'Madonna''s Moon' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2023 Fall' where name = 'Magic Mirror' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2024 Summer' where name = 'Mary Sol' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2022 Fall' where name = 'Michelada Beer' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2023 Fall' where name = 'Midnight Silk' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2023 Fall' where name = 'Hail Paimon!' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2023 Spring' where name = 'Misty Morning' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'Mother Goddess' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'Nightingale' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2024 Winter' where name = 'Peaceful Reverie' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2022 Fall' where name = 'Personal Legend' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2023 Spring' where name = 'Power of Manon' and recipe_group = 'Cocktails';
+update recipes set creator = 'Gillian', created_at_label = '2023 Fall' where name = 'Practical Magic' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kat', created_at_label = '2025 Fall' where name = 'Preacher''s Daughter' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2025 Spring' where name = 'Reina' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2025 Fall' where name = 'Root 666' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2025 Spring' where name = 'Rose Lane' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2023 Spring' where name = 'Rejuvenation' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2023 Fall' where name = 'Ruby River' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'Santa Muerte' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2023 Fall' where name = 'Shinto Priestess' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2024 Fall' where name = 'Siren''s Song' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2025 Summer' where name = 'Starling' and recipe_group = 'Cocktails';
+update recipes set creator = 'Kino', created_at_label = '2023 Fall' where name = 'Smoke Screen' and recipe_group = 'Cocktails';
+update recipes set creator = 'Nino', created_at_label = '2022 Fall' where name = 'Star Crossed Lovers' and recipe_group = 'Cocktails';
+update recipes set creator = 'Sai', created_at_label = '2022 Fall' where name = 'The Fly' and recipe_group = 'Cocktails';
+update recipes set creator = 'Lotus Eaters', created_at_label = '2022 Original' where name = 'The Occult Fashioned' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2023 Fall' where name = 'The Oracle' and recipe_group = 'Cocktails';
+update recipes set creator = 'Gillian/Jocelyn', created_at_label = '2024 Summer' where name = 'The Ritual' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2024 Summer' where name = 'Tiki Dream' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2024 Fall' where name = 'Twisted Arnie' and recipe_group = 'Cocktails';
+update recipes set creator = 'Gillian', created_at_label = '2023 Fall' where name = 'Venus in Scorpio' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2023 Fall' where name = 'Weighing of Souls' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2024 Summer' where name = 'Wildcat' and recipe_group = 'Cocktails';
+update recipes set creator = 'Ruben', created_at_label = '2024 Summer' where name = 'Willow' and recipe_group = 'Cocktails';
+update recipes set creator = 'Thai', created_at_label = '2025 Spring' where name = 'Year of the Snake' and recipe_group = 'Cocktails';

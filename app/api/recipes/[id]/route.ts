@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { verifyRequest } from "@/lib/auth/session";
 
-const ALLOWED_FIELDS = new Set(["on_menu", "creator", "created_at_label"]);
+const ALLOWED_FIELDS = new Set(["on_menu", "creator", "created_at_label", "refrigerate"]);
 
 /**
  * PATCH /api/recipes/:id
  *
  * Updates user-editable fields on a recipe.
- * Body: { on_menu?: boolean, creator?: string, created_at_label?: string }
+ * Body: { on_menu?: boolean, creator?: string, created_at_label?: string, refrigerate?: boolean }
  */
 export async function PATCH(
   request: NextRequest,
@@ -45,7 +45,7 @@ export async function PATCH(
     .from("recipes")
     .update(updates)
     .eq("id", recipeId)
-    .select("id, on_menu, creator, created_at_label")
+    .select("id, on_menu, creator, created_at_label, refrigerate")
     .single();
 
   if (error) {
