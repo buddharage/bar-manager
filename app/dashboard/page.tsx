@@ -2,6 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { getLocalDateStr, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +30,8 @@ export default async function DashboardPage() {
 
   // Fetch most recent sales day, last 7 days of sales, alerts, inventory summary,
   // top selling items, and latest sync — all in parallel.
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sevenDaysAgoStr = `${sevenDaysAgo.getFullYear()}-${String(sevenDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(sevenDaysAgo.getDate()).padStart(2, "0")}`;
+  // Use the restaurant's local timezone so date boundaries match the business day.
+  const sevenDaysAgoStr = getLocalDateStr(RESTAURANT_TIMEZONE, -7);
 
   const [
     latestSalesResult,

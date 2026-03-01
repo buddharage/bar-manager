@@ -4,6 +4,7 @@ import { fetchInventory, fetchAllMenuLookups } from "@/lib/integrations/toast-cl
 import { verifyRequest } from "@/lib/auth/session";
 import { syncOrdersForDate } from "@/lib/sync/toast-orders";
 import { recalculateExpectedInventory } from "@/lib/inventory/expected";
+import { getLocalDateStr, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
 
 // Daily Toast sync — called by GitHub Actions cron or manual trigger
 export async function POST(request: NextRequest) {
@@ -62,16 +63,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Sync yesterday's orders (use local time components to avoid UTC date shift)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    // 2. Sync yesterday's orders in the restaurant's local timezone so that
+    //    the full business day (midnight–midnight local) is captured instead
+    //    of the UTC window, which was cutting off evening/night orders.
+    const dateStr = getLocalDateStr(RESTAURANT_TIMEZONE, -1);
 
     const { records: orderRecords, ordersProcessed } = await syncOrdersForDate(
       supabase,
       dateStr,
       categoryMap,
       sizeGroupGuids,
+      RESTAURANT_TIMEZONE,
     );
     totalRecords += orderRecords;
 

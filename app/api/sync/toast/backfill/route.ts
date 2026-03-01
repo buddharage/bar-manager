@@ -4,6 +4,7 @@ import { verifyRequest } from "@/lib/auth/session";
 import { fetchAllMenuLookups } from "@/lib/integrations/toast-client";
 import { syncOrdersForDate } from "@/lib/sync/toast-orders";
 import { recalculateExpectedInventory } from "@/lib/inventory/expected";
+import { getLocalDateStr, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
 
 // Maximum number of days to backfill in a single request to avoid timeouts
 const MAX_DAYS = 90;
@@ -57,9 +58,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Don't allow syncing today or future dates — data won't be complete
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const maxDate = formatDate(yesterday);
+  const maxDate = getLocalDateStr(RESTAURANT_TIMEZONE, -1);
   if (endDate > maxDate) {
     return NextResponse.json(
       { error: `endDate cannot be after yesterday (${maxDate}). Today's data is not yet complete.` },
@@ -101,6 +100,7 @@ export async function POST(request: NextRequest) {
         dateStr,
         categoryMap,
         sizeGroupGuids,
+        RESTAURANT_TIMEZONE,
       );
       totalRecords += records;
       totalOrders += ordersProcessed;

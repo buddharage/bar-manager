@@ -1,18 +1,24 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { fetchOrders, fetchMenuItemCategoryMap, fetchSizeOptionGroupGuids } from "@/lib/integrations/toast-client";
+import { getLocalDayUTCRange, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
 
 /**
  * Sync a single day's orders from Toast into daily_sales + order_items.
  * Returns the number of records upserted/inserted.
+ *
+ * `dateStr` is a local calendar date (YYYY-MM-DD) in the restaurant's
+ * timezone. The Toast API is queried for the corresponding UTC range so
+ * that the full local business day is captured (e.g. midnight–midnight ET
+ * instead of midnight–midnight UTC).
  */
 export async function syncOrdersForDate(
   supabase: SupabaseClient,
   dateStr: string,
   categoryMap: Map<string, string>,
   sizeGroupGuids: Set<string>,
+  timezone: string = RESTAURANT_TIMEZONE,
 ): Promise<{ records: number; ordersProcessed: number }> {
-  const startOfDay = `${dateStr}T00:00:00.000+0000`;
-  const endOfDay = `${dateStr}T23:59:59.999+0000`;
+  const { start: startOfDay, end: endOfDay } = getLocalDayUTCRange(dateStr, timezone);
 
   const orders = await fetchOrders(startOfDay, endOfDay);
 
@@ -71,7 +77,7 @@ export async function syncOrdersForDate(
   }
 
   // Upsert daily sales
-  await supabase.from("daily_sales").upsert(
+  const { error: salesError } = await supabase.from("daily_sales").upsert(
     {
       date: dateStr,
       gross_sales: grossSales,
@@ -83,6 +89,10 @@ export async function syncOrdersForDate(
     },
     { onConflict: "date" }
   );
+  if (salesError) {
+    console.error(`Failed to upsert daily_sales for ${dateStr}:`, salesError);
+    throw new Error(`Failed to upsert daily sales for ${dateStr}: ${salesError.message}`);
+  }
   let records = 1;
 
   // Insert order items (clear previous entries to avoid duplicates on re-run)
@@ -97,8 +107,15 @@ export async function syncOrdersForDate(
   }));
 
   if (orderItemRows.length > 0) {
-    await supabase.from("order_items").delete().eq("date", dateStr);
-    await supabase.from("order_items").insert(orderItemRows);
+    const { error: deleteError } = await supabase.from("order_items").delete().eq("date", dateStr);
+    if (deleteError) {
+      console.error(`Failed to delete old order_items for ${dateStr}:`, deleteError);
+    }
+    const { error: insertError } = await supabase.from("order_items").insert(orderItemRows);
+    if (insertError) {
+      console.error(`Failed to insert order_items for ${dateStr}:`, insertError);
+      throw new Error(`Failed to insert order items for ${dateStr}: ${insertError.message}`);
+    }
     records += orderItemRows.length;
   }
 
