@@ -5,7 +5,17 @@ export default function PayrollPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Payroll</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold">Payroll</h1>
+          <a
+            href="https://payroll.toasttab.com/witchinghour/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Open in Toast Payroll &darr;
+          </a>
+        </div>
         <Badge variant="secondary">Phase 3</Badge>
       </div>
 
