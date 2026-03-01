@@ -42,18 +42,23 @@ export async function POST(request: NextRequest) {
 
     for (const item of stockItems) {
       const guid = item.menuItem.guid;
-      await supabase
+      const { error: upsertError } = await supabase
         .from("inventory_items")
         .upsert(
           {
             toast_guid: guid,
             name: menuNameMap.get(guid) || guid,
+            category: categoryMap.get(guid) || null,
             current_stock: item.quantity,
             last_synced_at: new Date().toISOString(),
           },
           { onConflict: "toast_guid" }
         );
-      totalRecords++;
+      if (upsertError) {
+        console.error(`Failed to upsert inventory item ${guid}:`, upsertError);
+      } else {
+        totalRecords++;
+      }
     }
 
     // 2. Sync yesterday's orders
