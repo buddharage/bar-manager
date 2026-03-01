@@ -3,23 +3,36 @@
  * xtraCHEF Recipe Sync — CLI Script
  *
  * Fetches recipes from xtraCHEF's internal API and stores them in Supabase.
+ * Can be used instead of (or in addition to) the Settings page sync button.
  *
  * Usage:
  *   npx tsx scripts/sync-xtrachef.ts
+ *   # or
+ *   npm run sync:xtrachef
  *
  * Requires env vars (set in .env.local):
- *   NEXT_PUBLIC_SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY
- *   XTRACHEF_TENANT_ID
- *   XTRACHEF_LOCATION_ID
- *   XTRACHEF_COOKIE          (or stored in settings table)
+ *   NEXT_PUBLIC_SUPABASE_URL   — Supabase project URL
+ *   SUPABASE_SERVICE_ROLE_KEY  — Supabase service role key (not anon key)
+ *   XTRACHEF_TENANT_ID         — Your xtraCHEF tenant ID (see below)
+ *   XTRACHEF_LOCATION_ID       — Your xtraCHEF location ID (see below)
+ *   XTRACHEF_COOKIE            — Session cookie (or stored via Settings page)
  *
- * To get your session cookie:
- *   1. Log into app.sa.toasttab.com in your browser
- *   2. Open DevTools → Network tab
- *   3. Navigate to Recipes
- *   4. Find any request to ecs-api-prod.sa.toasttab.com
- *   5. Copy the full Cookie header value
+ * How to find your Tenant ID and Location ID:
+ *   1. Log into https://app.sa.toasttab.com
+ *   2. Open DevTools (F12) → Network tab
+ *   3. Navigate to Recipes (app.sa.toasttab.com/Recipe/Recipe/NewRecipe)
+ *   4. In Network, look for a request to ecs-api-prod.sa.toasttab.com
+ *      containing "recipe-summary". The URL looks like:
+ *      .../recipes-v2/tenants/{TENANT_ID}/location/{LOCATION_ID}/recipe-summary
+ *   5. Copy the numeric values from that URL
+ *
+ * How to get your session cookie:
+ *   1. In the same DevTools Network tab, click the recipe-summary request
+ *   2. Under "Request Headers", find the "Cookie:" header
+ *   3. Copy the entire value (it's a long string)
+ *   4. Set it as XTRACHEF_COOKIE in .env.local, or paste it in the
+ *      Settings page under "xtraCHEF Recipes → Session cookie"
+ *   Note: The cookie expires when your browser session ends.
  */
 
 import "dotenv/config";
@@ -39,7 +52,16 @@ const tenantId = process.env.XTRACHEF_TENANT_ID;
 const locationId = process.env.XTRACHEF_LOCATION_ID;
 
 if (!tenantId || !locationId) {
-  console.error("Missing XTRACHEF_TENANT_ID or XTRACHEF_LOCATION_ID in .env.local");
+  console.error(
+    "Missing XTRACHEF_TENANT_ID or XTRACHEF_LOCATION_ID in .env.local\n\n" +
+    "To find these values:\n" +
+    "  1. Log into https://app.sa.toasttab.com\n" +
+    "  2. Open DevTools (F12) > Network tab\n" +
+    "  3. Navigate to Recipes\n" +
+    "  4. Find a request to ecs-api-prod.sa.toasttab.com with 'recipe-summary'\n" +
+    "  5. The URL contains: .../tenants/{TENANT_ID}/location/{LOCATION_ID}/...\n" +
+    "  6. Copy the numeric IDs into .env.local",
+  );
   process.exit(1);
 }
 

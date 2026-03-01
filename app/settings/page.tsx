@@ -340,11 +340,22 @@ function SettingsContent() {
               <label className="text-sm font-medium" htmlFor="xc-cookie">
                 Session cookie
               </label>
-              <p className="text-xs text-muted-foreground mb-1.5">
-                Log into app.sa.toasttab.com, open DevTools &gt; Network, navigate to
-                Recipes, find any request to <code>ecs-api-prod.sa.toasttab.com</code>,
-                and copy the <code>Cookie</code> header value.
-              </p>
+              <div className="rounded border bg-muted/50 p-3 text-xs text-muted-foreground mb-2 space-y-1">
+                <p className="font-medium text-foreground text-sm">How to get your cookie:</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Log into <a href="https://app.sa.toasttab.com" target="_blank" rel="noopener noreferrer" className="underline">app.sa.toasttab.com</a></li>
+                  <li>Open DevTools (<kbd className="rounded bg-muted px-1 py-0.5">F12</kbd> or <kbd className="rounded bg-muted px-1 py-0.5">Cmd+Opt+I</kbd>)</li>
+                  <li>Go to the <strong>Network</strong> tab</li>
+                  <li>Navigate to Recipes in xtraCHEF</li>
+                  <li>In Network, find any request to <code className="rounded bg-muted px-1">ecs-api-prod.sa.toasttab.com</code></li>
+                  <li>Click the request, scroll to <strong>Request Headers</strong></li>
+                  <li>Copy the full <code className="rounded bg-muted px-1">Cookie</code> header value and paste it below</li>
+                </ol>
+                <p className="pt-1">
+                  The cookie expires when your Toast session ends.
+                  Re-paste it here whenever sync returns a 401 error.
+                </p>
+              </div>
               <div className="flex gap-2">
                 <input
                   id="xc-cookie"

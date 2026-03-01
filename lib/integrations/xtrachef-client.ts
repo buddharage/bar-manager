@@ -2,15 +2,26 @@
  * xtraCHEF Recipe API Client
  *
  * Calls xtraCHEF's internal API endpoints directly to fetch recipe data.
- * These endpoints are used by the xtraCHEF SPA at app.sa.toasttab.com.
+ * These endpoints are used by the xtraCHEF SPA at app.sa.toasttab.com
+ * (visible in browser DevTools → Network tab when navigating to Recipes).
  *
  * Auth: Requires a session cookie from a logged-in xtraCHEF browser session.
- * The user copies their cookie value from browser DevTools and pastes it
- * into the bar-manager settings page.
+ * The user copies the Cookie header value from any request to
+ * ecs-api-prod.sa.toasttab.com in browser DevTools and pastes it
+ * into the bar-manager Settings page (or XTRACHEF_COOKIE env var).
  *
- * Endpoints:
- *   Summary list: /api.recipes-query/api/1.0/recipes-v2/tenants/{t}/location/{l}/recipe-summary
- *   Recipe detail: /api.recipes-query/api/1.0/recipes-v2/{recipeId}/tenants/{t}/locations/{l}/recipe-details
+ * Endpoints (base: ecs-api-prod.sa.toasttab.com):
+ *   Recipe list:
+ *     GET /api.recipes-query/api/1.0/recipes-v2/tenants/{tenantId}/location/{locationId}/recipe-summary?isReGenerate=true
+ *     → Returns all recipes with name, type, group, cost, Toast linkage
+ *
+ *   Recipe detail (per recipe):
+ *     GET /api.recipes-query/api/1.0/recipes-v2/{recipeId}/tenants/{tenantId}/locations/{locationId}/recipe-details?isReGenerate=false
+ *     → Returns full ingredient list with name, type, qty, UOM, cost
+ *
+ * Environment variables:
+ *   XTRACHEF_TENANT_ID   — numeric tenant ID from the API URL (e.g. 39494)
+ *   XTRACHEF_LOCATION_ID — numeric location ID from the API URL (e.g. 12802)
  */
 
 const API_BASE = "https://ecs-api-prod.sa.toasttab.com/api.recipes-query/api/1.0/recipes-v2";

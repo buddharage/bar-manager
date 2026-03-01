@@ -37,7 +37,13 @@ export async function POST(request: NextRequest) {
 
   if (!tenantId || !locationId) {
     return NextResponse.json(
-      { error: "XTRACHEF_TENANT_ID and XTRACHEF_LOCATION_ID must be set in env" },
+      {
+        error:
+          "XTRACHEF_TENANT_ID and XTRACHEF_LOCATION_ID must be set in .env.local. " +
+          "Find them in browser DevTools → Network tab: look for a request to " +
+          "ecs-api-prod.sa.toasttab.com containing 'recipe-summary' — the URL " +
+          "contains .../tenants/{TENANT_ID}/location/{LOCATION_ID}/...",
+      },
       { status: 500 },
     );
   }

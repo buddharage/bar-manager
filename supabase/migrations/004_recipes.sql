@@ -1,8 +1,17 @@
 -- Recipes & Ingredients (synced from xtraCHEF internal API)
 --
--- xtraCHEF API endpoints:
---   Summary: ecs-api-prod.sa.toasttab.com/api.recipes-query/api/1.0/recipes-v2/tenants/{t}/location/{l}/recipe-summary
---   Detail:  ecs-api-prod.sa.toasttab.com/api.recipes-query/api/1.0/recipes-v2/{recipeId}/tenants/{t}/locations/{l}/recipe-details
+-- xtraCHEF has no public API. Data is fetched by calling the same endpoints
+-- the xtraCHEF SPA (app.sa.toasttab.com) uses, authenticated with the
+-- user's session cookie.
+--
+-- API endpoints (host: ecs-api-prod.sa.toasttab.com):
+--   Summary: /api.recipes-query/api/1.0/recipes-v2/tenants/{t}/location/{l}/recipe-summary
+--   Detail:  /api.recipes-query/api/1.0/recipes-v2/{recipeId}/tenants/{t}/locations/{l}/recipe-details
+--
+-- Env vars required:
+--   XTRACHEF_TENANT_ID    — numeric, from the API URL (e.g. 39494)
+--   XTRACHEF_LOCATION_ID  — numeric, from the API URL (e.g. 12802)
+--   XTRACHEF_COOKIE       — session cookie (or set via Settings page UI)
 
 -- ============================================================
 -- Recipes (cocktails, dishes, prep batches)
