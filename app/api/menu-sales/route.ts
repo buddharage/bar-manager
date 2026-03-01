@@ -171,6 +171,16 @@ export async function GET(request: NextRequest) {
   const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalRevenue = items.reduce((sum, i) => sum + i.revenue, 0);
 
+  // Find earliest ingestion timestamp for this data set
+  let earliestQuery = supabase
+    .from("order_items")
+    .select("created_at")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (startDate) earliestQuery = earliestQuery.gte("date", startDate);
+  if (endDate) earliestQuery = earliestQuery.lte("date", endDate);
+  const { data: earliestRow } = await earliestQuery.single();
+
   return NextResponse.json({
     items,
     summary: {
@@ -178,5 +188,6 @@ export async function GET(request: NextRequest) {
       totalQuantity,
       totalRevenue,
     },
+    dataIngestedAt: earliestRow?.created_at ?? null,
   });
 }

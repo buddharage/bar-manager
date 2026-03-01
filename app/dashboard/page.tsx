@@ -12,12 +12,12 @@ function formatCurrency(amount: number): string {
 export default async function DashboardPage() {
   const supabase = createServerClient();
 
-  const today = new Date().toISOString().split("T")[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  const now = new Date();
+  const yesterdayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const yesterday = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, "0")}-${String(yesterdayDate.getDate()).padStart(2, "0")}`;
 
-  // Fetch today's and yesterday's sales, unresolved alerts, and latest sync in parallel
-  const [salesResult, yesterdaySalesResult, alertsResult, syncResult] = await Promise.all([
-    supabase.from("daily_sales").select("*").eq("date", today).single(),
+  // Fetch yesterday's sales, unresolved alerts, and latest sync in parallel
+  const [yesterdaySalesResult, alertsResult, syncResult] = await Promise.all([
     supabase.from("daily_sales").select("*").eq("date", yesterday).single(),
     supabase
       .from("inventory_alerts")
@@ -34,7 +34,6 @@ export default async function DashboardPage() {
       .single(),
   ]);
 
-  const todaySales = salesResult.data;
   const yesterdaySales = yesterdaySalesResult.data;
   const alerts = alertsResult.data || [];
   const lastSync = syncResult.data;
@@ -54,25 +53,12 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* Sales KPIs */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Sales KPIs — yesterday (daily sync only captures previous day) */}
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Today&apos;s Sales
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {todaySales ? formatCurrency(todaySales.net_sales) : "—"}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Yesterday&apos;s Sales
+              Yesterday&apos;s Net Sales
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -85,12 +71,12 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Tax Collected Today
+              Yesterday&apos;s Tax Collected
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {todaySales ? formatCurrency(todaySales.tax_collected) : "—"}
+              {yesterdaySales ? formatCurrency(yesterdaySales.tax_collected) : "—"}
             </div>
           </CardContent>
         </Card>
@@ -98,12 +84,12 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Tips Today
+              Yesterday&apos;s Tips
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {todaySales ? formatCurrency(todaySales.tips) : "—"}
+              {yesterdaySales ? formatCurrency(yesterdaySales.tips) : "—"}
             </div>
           </CardContent>
         </Card>

@@ -1,5 +1,4 @@
 export type DatePreset =
-  | "today"
   | "yesterday"
   | "past_week"
   | "past_month"
@@ -30,9 +29,6 @@ export function getDateRange(
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   switch (preset) {
-    case "today":
-      return { start: fmtLocal(today), end: fmtLocal(today) };
-
     case "yesterday": {
       const y = new Date(today);
       y.setDate(y.getDate() - 1);
