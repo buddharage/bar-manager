@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -44,6 +46,24 @@ interface Recipe {
   creator: string | null;
   created_at_label: string | null;
   recipe_ingredients: RecipeIngredient[];
+}
+
+// ---------------------------------------------------------------------------
+// Mobile detection hook
+// ---------------------------------------------------------------------------
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [breakpoint]);
+
+  return isMobile;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +206,14 @@ function SortableHead({
 }
 
 // ---------------------------------------------------------------------------
+// Helper: slugify group names for tab values
+// ---------------------------------------------------------------------------
+
+function groupSlug(group: string) {
+  return group.replace(/\s+/g, "-").toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
 // Main RecipeList component
 // ---------------------------------------------------------------------------
 
@@ -196,6 +224,12 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("");
+  const [scrollTargetId, setScrollTargetId] = useState<number | null>(null);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Filters
   const [filterOnMenu, setFilterOnMenu] = useState<"" | "yes" | "no">("");
@@ -212,11 +246,39 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
     [recipes],
   );
 
-  const guidToRecipeId = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of recipes) map.set(r.xtrachef_guid, r.id);
+  // Lookup maps
+  const guidToRecipe = useMemo(() => {
+    const map = new Map<string, Recipe>();
+    for (const r of recipes) map.set(r.xtrachef_guid, r);
     return map;
   }, [recipes]);
+
+  const recipeById = useMemo(() => {
+    const map = new Map<number, Recipe>();
+    for (const r of recipes) map.set(r.id, r);
+    return map;
+  }, [recipes]);
+
+  // Reverse lookup: prep recipe id -> list of recipes that use it as an ingredient
+  const usedInMap = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; group: string }[]>();
+    for (const r of recipes) {
+      for (const ing of r.recipe_ingredients) {
+        if (ing.type === "Prep recipe" && ing.reference_guid) {
+          const prepRecipe = guidToRecipe.get(ing.reference_guid);
+          if (prepRecipe) {
+            const list = map.get(prepRecipe.id) || [];
+            // Avoid duplicates
+            if (!list.some((x) => x.id === r.id)) {
+              list.push({ id: r.id, name: r.name, group: r.recipe_group || "Uncategorized" });
+            }
+            map.set(prepRecipe.id, list);
+          }
+        }
+      }
+    }
+    return map;
+  }, [recipes, guidToRecipe]);
 
   // Filter + search
   const filtered = useMemo(() => {
@@ -238,6 +300,29 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
     () => [...new Set(filtered.map((r) => r.recipe_group || "Uncategorized"))],
     [filtered],
   );
+
+  // Set initial active tab
+  useEffect(() => {
+    if (groups.length > 0 && (!activeTab || !groups.some((g) => groupSlug(g) === activeTab))) {
+      setActiveTab(groupSlug(groups[0]));
+    }
+  }, [groups, activeTab]);
+
+  // Scroll to target recipe after tab switch + render
+  useEffect(() => {
+    if (scrollTargetId == null) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`recipe-${scrollTargetId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightId(scrollTargetId);
+        // Clear highlight after animation
+        setTimeout(() => setHighlightId(null), 2000);
+      }
+      setScrollTargetId(null);
+    }, 50); // short delay to let the tab content render
+    return () => clearTimeout(timer);
+  }, [scrollTargetId, activeTab]);
 
   // Sort within groups
   function sortRecipes(list: Recipe[]): Recipe[] {
@@ -265,6 +350,25 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
       return next;
     });
   }
+
+  // Navigate to a recipe: switch tab, expand it, scroll to it
+  const navigateToRecipe = useCallback(
+    (recipeId: number) => {
+      const target = recipeById.get(recipeId);
+      if (!target) return;
+
+      const targetGroup = target.recipe_group || "Uncategorized";
+      const targetSlug = groupSlug(targetGroup);
+
+      // Switch tab
+      setActiveTab(targetSlug);
+      // Expand the target recipe
+      setExpandedIds((prev) => new Set(prev).add(recipeId));
+      // Queue scroll
+      setScrollTargetId(recipeId);
+    },
+    [recipeById],
+  );
 
   // Persist an editable field update
   const updateRecipe = useCallback(
@@ -296,94 +400,146 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
 
   const hasActiveFilters = filterOnMenu || filterCreator || filterCreatedAt;
 
+  // Active group's recipes (used for mobile rendering)
+  const activeGroupRecipes = useMemo(() => {
+    const group = groups.find((g) => groupSlug(g) === activeTab);
+    if (!group) return [];
+    return sortRecipes(
+      filtered.filter((r) => (r.recipe_group || "Uncategorized") === group),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, activeTab, filtered, sort]);
+
+  // -------------------------------------------------------------------------
+  // Filter controls (shared between mobile & desktop)
+  // -------------------------------------------------------------------------
+
+  const filterControls = (
+    <div className="flex flex-wrap items-end gap-3">
+      {/* On Menu filter */}
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground">On Menu</label>
+        <select
+          className="block h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={filterOnMenu}
+          onChange={(e) => setFilterOnMenu(e.target.value as "" | "yes" | "no")}
+        >
+          <option value="">All</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      </div>
+
+      {/* Creator filter */}
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground">Creator</label>
+        <select
+          className="block h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={filterCreator}
+          onChange={(e) => setFilterCreator(e.target.value)}
+        >
+          <option value="">All</option>
+          {creatorOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Created At filter */}
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground">Created At</label>
+        <select
+          className="block h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={filterCreatedAt}
+          onChange={(e) => setFilterCreatedAt(e.target.value)}
+        >
+          <option value="">All</option>
+          {createdAtOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {hasActiveFilters && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setFilterOnMenu("");
+            setFilterCreator("");
+            setFilterCreatedAt("");
+          }}
+        >
+          Clear filters
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      {/* Search + filters */}
+      {/* Search + filters — sticky header */}
       <div className="sticky top-0 z-10 bg-background pb-3 space-y-3 border-b">
-        <div className="flex flex-wrap items-end gap-3">
-          <Input
-            placeholder="Search recipes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
+        {isMobile ? (
+          <>
+            {/* Mobile: search + filter toggle + category dropdown */}
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Search recipes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setFiltersOpen(!filtersOpen)}
+              >
+                Filters{hasActiveFilters ? " *" : ""}
+              </Button>
+            </div>
 
-          {/* On Menu filter */}
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">On Menu</label>
-            <select
-              className="block h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={filterOnMenu}
-              onChange={(e) => setFilterOnMenu(e.target.value as "" | "yes" | "no")}
-            >
-              <option value="">All</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </div>
+            {filtersOpen && filterControls}
 
-          {/* Creator filter */}
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Creator</label>
-            <select
-              className="block h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={filterCreator}
-              onChange={(e) => setFilterCreator(e.target.value)}
-            >
-              <option value="">All</option>
-              {creatorOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Created At filter */}
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Created At</label>
-            <select
-              className="block h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={filterCreatedAt}
-              onChange={(e) => setFilterCreatedAt(e.target.value)}
-            >
-              <option value="">All</option>
-              {createdAtOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setFilterOnMenu("");
-                setFilterCreator("");
-                setFilterCreatedAt("");
-              }}
-            >
-              Clear filters
-            </Button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {groups.map((group) => (
-            <a
-              key={group}
-              href={`#group-${group.replace(/\s+/g, "-")}`}
-              className="inline-block"
-            >
-              <Badge variant="outline" className="cursor-pointer hover:bg-accent text-xs">
-                {group}
-              </Badge>
-            </a>
-          ))}
-        </div>
+            {/* Mobile category dropdown */}
+            {groups.length > 0 && (
+              <select
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm font-medium"
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value)}
+              >
+                {groups.map((group) => {
+                  const count = filtered.filter(
+                    (r) => (r.recipe_group || "Uncategorized") === group,
+                  ).length;
+                  return (
+                    <option key={group} value={groupSlug(group)}>
+                      {group} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Desktop: search + inline filters */}
+            <div className="flex flex-wrap items-end gap-3">
+              <Input
+                placeholder="Search recipes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-sm"
+              />
+              {filterControls}
+            </div>
+          </>
+        )}
       </div>
 
       {filtered.length === 0 && (search.trim() || hasActiveFilters) && (
@@ -392,72 +548,338 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
         </p>
       )}
 
-      {groups.map((group) => {
-        const groupRecipes = sortRecipes(
-          filtered.filter((r) => (r.recipe_group || "Uncategorized") === group),
-        );
+      {/* Mobile: card list for active category */}
+      {isMobile && groups.length > 0 && (
+        <div className="space-y-2">
+          {activeGroupRecipes.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No recipes in this category.
+            </p>
+          ) : (
+            activeGroupRecipes.map((recipe) => (
+              <MobileRecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                isExpanded={expandedIds.has(recipe.id)}
+                isHighlighted={highlightId === recipe.id}
+                onToggle={() => toggleExpanded(recipe.id)}
+                guidToRecipe={guidToRecipe}
+                usedIn={usedInMap.get(recipe.id)}
+                onNavigate={navigateToRecipe}
+                creatorOptions={creatorOptions}
+                createdAtOptions={createdAtOptions}
+                onUpdate={updateRecipe}
+              />
+            ))
+          )}
+        </div>
+      )}
 
-        return (
-          <Card key={group} id={`group-${group.replace(/\s+/g, "-")}`}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>{group}</span>
-                <Badge variant="secondary">{groupRecipes.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Created At" sortKey="created_at_label" currentSort={sort} onSort={handleSort} />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupRecipes.map((recipe) => {
-                    const hasIngredients = recipe.recipe_ingredients?.length > 0;
-                    const isExpanded = expandedIds.has(recipe.id);
+      {/* Desktop: category tabs + sortable table */}
+      {!isMobile && groups.length > 0 && (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList variant="line" className="flex flex-wrap gap-1 w-full justify-start">
+            {groups.map((group) => {
+              const count = filtered.filter(
+                (r) => (r.recipe_group || "Uncategorized") === group,
+              ).length;
+              return (
+                <TabsTrigger key={group} value={groupSlug(group)}>
+                  {group}
+                  <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">
+                    {count}
+                  </Badge>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
 
-                    return (
-                      <ExpandableRecipeRow
-                        key={recipe.id}
-                        recipe={recipe}
-                        hasIngredients={hasIngredients}
-                        isExpanded={isExpanded}
-                        onToggle={() => toggleExpanded(recipe.id)}
-                        guidToRecipeId={guidToRecipeId}
-                        creatorOptions={creatorOptions}
-                        createdAtOptions={createdAtOptions}
-                        onUpdate={updateRecipe}
-                      />
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        );
-      })}
+          {groups.map((group) => {
+            const groupRecipes = sortRecipes(
+              filtered.filter((r) => (r.recipe_group || "Uncategorized") === group),
+            );
+
+            return (
+              <TabsContent key={group} value={groupSlug(group)}>
+                <Card>
+                  <CardContent className="pt-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
+                          <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
+                          <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
+                          <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Created At" sortKey="created_at_label" currentSort={sort} onSort={handleSort} />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {groupRecipes.map((recipe) => {
+                          const hasIngredients = recipe.recipe_ingredients?.length > 0;
+                          const isExpanded = expandedIds.has(recipe.id);
+
+                          return (
+                            <ExpandableRecipeRow
+                              key={recipe.id}
+                              recipe={recipe}
+                              hasIngredients={hasIngredients}
+                              isExpanded={isExpanded}
+                              isHighlighted={highlightId === recipe.id}
+                              onToggle={() => toggleExpanded(recipe.id)}
+                              guidToRecipe={guidToRecipe}
+                              usedIn={usedInMap.get(recipe.id)}
+                              onNavigate={navigateToRecipe}
+                              creatorOptions={creatorOptions}
+                              createdAtOptions={createdAtOptions}
+                              onUpdate={updateRecipe}
+                            />
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            );
+          })}
+        </Tabs>
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Expandable recipe row
+// Mobile recipe card (expandable)
+// ---------------------------------------------------------------------------
+
+function MobileRecipeCard({
+  recipe,
+  isExpanded,
+  isHighlighted,
+  onToggle,
+  guidToRecipe,
+  usedIn,
+  onNavigate,
+  creatorOptions,
+  createdAtOptions,
+  onUpdate,
+}: {
+  recipe: Recipe;
+  isExpanded: boolean;
+  isHighlighted: boolean;
+  onToggle: () => void;
+  guidToRecipe: Map<string, Recipe>;
+  usedIn?: { id: number; name: string; group: string }[];
+  onNavigate: (recipeId: number) => void;
+  creatorOptions: string[];
+  createdAtOptions: string[];
+  onUpdate: (id: number, field: string, value: unknown) => void;
+}) {
+  const hasIngredients = recipe.recipe_ingredients?.length > 0;
+
+  return (
+    <div
+      id={`recipe-${recipe.id}`}
+      className={cn(
+        "border rounded-lg p-3 transition-colors",
+        hasIngredients && "cursor-pointer active:bg-muted/50",
+        isHighlighted && "bg-blue-100 dark:bg-blue-900/30 transition-colors duration-1000",
+      )}
+      onClick={hasIngredients ? onToggle : undefined}
+    >
+      {/* Card header */}
+      <div className="flex items-start gap-2">
+        {hasIngredients && (
+          <span className="text-muted-foreground text-xs mt-0.5 w-4 shrink-0">
+            {isExpanded ? "▼" : "▶"}
+          </span>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm">{recipe.name}</div>
+          <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground flex-wrap">
+            {recipe.menu_price != null && (
+              <span>${Number(recipe.menu_price).toFixed(2)}</span>
+            )}
+            {recipe.prime_cost != null && (
+              <>
+                <span className="text-muted-foreground/50">·</span>
+                <span>Cost ${Number(recipe.prime_cost).toFixed(2)}</span>
+              </>
+            )}
+            {recipe.food_cost_pct != null && (
+              <>
+                <span className="text-muted-foreground/50">·</span>
+                {costBadge(recipe.food_cost_pct)}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <Badge
+            variant={recipe.on_menu ? "default" : "outline"}
+            className="text-[10px] px-1.5 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdate(recipe.id, "on_menu", !recipe.on_menu);
+            }}
+          >
+            {recipe.on_menu ? "Menu" : "Off"}
+          </Badge>
+          <Badge
+            variant={recipe.refrigerate ? "default" : "outline"}
+            className="text-[10px] px-1.5 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdate(recipe.id, "refrigerate", !recipe.refrigerate);
+            }}
+          >
+            {recipe.refrigerate ? "Fridge" : "No"}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Expanded details */}
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t space-y-3" onClick={(e) => e.stopPropagation()}>
+          {/* Image */}
+          {recipe.image_url && (
+            <img
+              src={recipe.image_url}
+              alt={recipe.name}
+              className="w-full h-36 object-cover rounded"
+            />
+          )}
+
+          {/* Meta fields */}
+          <div className="space-y-2 text-sm">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {recipe.serving_size != null && (
+                <span className="text-muted-foreground">
+                  Serving: {Number(recipe.serving_size)}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <span className="text-muted-foreground">Creator:</span>
+                <EditableCell
+                  value={recipe.creator}
+                  options={creatorOptions}
+                  onSave={(val) => onUpdate(recipe.id, "creator", val)}
+                  placeholder="Add..."
+                />
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="text-muted-foreground">Created:</span>
+                <EditableCell
+                  value={recipe.created_at_label}
+                  options={createdAtOptions}
+                  onSave={(val) => onUpdate(recipe.id, "created_at_label", val)}
+                  placeholder="Add..."
+                />
+              </span>
+            </div>
+
+            {recipe.notes && (
+              <p className="text-xs">
+                <span className="font-medium text-muted-foreground">Notes:</span>{" "}
+                {recipe.notes}
+              </p>
+            )}
+            {recipe.instructions && (
+              <div className="text-xs">
+                <span className="font-medium text-muted-foreground">Instructions:</span>{" "}
+                <span className="whitespace-pre-line">{recipe.instructions}</span>
+              </div>
+            )}
+
+            {/* Used in links */}
+            {usedIn && usedIn.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                <span className="font-medium text-muted-foreground">Used in:</span>
+                {usedIn.map((ref, i) => (
+                  <span key={ref.id}>
+                    <button
+                      type="button"
+                      className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
+                      onClick={() => onNavigate(ref.id)}
+                    >
+                      {ref.name}
+                    </button>
+                    {i < usedIn.length - 1 && <span className="text-muted-foreground">,</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Ingredients list */}
+          {recipe.recipe_ingredients.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Ingredients
+              </div>
+              {recipe.recipe_ingredients.map((ing) => {
+                const linkedRecipe =
+                  ing.type === "Prep recipe" && ing.reference_guid
+                    ? guidToRecipe.get(ing.reference_guid)
+                    : undefined;
+
+                return (
+                  <div
+                    key={ing.id}
+                    className="flex items-center justify-between text-xs py-1 border-b border-border/50 last:border-0"
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      {linkedRecipe ? (
+                        <button
+                          type="button"
+                          className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300 text-left"
+                          onClick={() => onNavigate(linkedRecipe.id)}
+                        >
+                          {ing.name}
+                        </button>
+                      ) : (
+                        <span className="truncate">{ing.name}</span>
+                      )}
+                      {ing.type === "Prep recipe" && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">
+                          prep
+                        </Badge>
+                      )}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 ml-2 text-right">
+                      {ing.quantity != null ? ing.quantity : ""}{" "}
+                      {ing.uom || ""}
+                      {ing.cost != null && (
+                        <span className="ml-1">${Number(ing.cost).toFixed(2)}</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Desktop expandable recipe row
 // ---------------------------------------------------------------------------
 
 function ExpandableRecipeRow({
   recipe,
   hasIngredients,
   isExpanded,
+  isHighlighted,
   onToggle,
-  guidToRecipeId,
+  guidToRecipe,
+  usedIn,
+  onNavigate,
   creatorOptions,
   createdAtOptions,
   onUpdate,
@@ -465,8 +887,11 @@ function ExpandableRecipeRow({
   recipe: Recipe;
   hasIngredients: boolean;
   isExpanded: boolean;
+  isHighlighted: boolean;
   onToggle: () => void;
-  guidToRecipeId: Map<string, number>;
+  guidToRecipe: Map<string, Recipe>;
+  usedIn?: { id: number; name: string; group: string }[];
+  onNavigate: (recipeId: number) => void;
   creatorOptions: string[];
   createdAtOptions: string[];
   onUpdate: (id: number, field: string, value: unknown) => void;
@@ -475,7 +900,9 @@ function ExpandableRecipeRow({
     <>
       <TableRow
         id={`recipe-${recipe.id}`}
-        className={hasIngredients ? "cursor-pointer hover:bg-muted/50" : ""}
+        className={`${hasIngredients ? "cursor-pointer hover:bg-muted/50" : ""} ${
+          isHighlighted ? "bg-blue-100 dark:bg-blue-900/30 transition-colors duration-1000" : ""
+        }`}
         onClick={hasIngredients ? onToggle : undefined}
       >
         <TableCell className="font-medium">
@@ -551,7 +978,7 @@ function ExpandableRecipeRow({
         </TableCell>
       </TableRow>
 
-      {isExpanded && (recipe.notes || recipe.serving_size != null || recipe.instructions || recipe.image_url) && (
+      {isExpanded && (recipe.notes || recipe.serving_size != null || recipe.instructions || recipe.image_url || (usedIn && usedIn.length > 0)) && (
         <TableRow className="bg-muted/30">
           <TableCell colSpan={COL_COUNT} className="py-3 px-10">
             <div className="flex gap-6">
@@ -581,6 +1008,26 @@ function ExpandableRecipeRow({
                     <span className="whitespace-pre-line">{recipe.instructions}</span>
                   </div>
                 )}
+                {usedIn && usedIn.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-medium text-muted-foreground">Used in:</span>
+                    {usedIn.map((ref, i) => (
+                      <span key={ref.id}>
+                        <button
+                          type="button"
+                          className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onNavigate(ref.id);
+                          }}
+                        >
+                          {ref.name}
+                        </button>
+                        {i < usedIn.length - 1 && <span className="text-muted-foreground">,</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </TableCell>
@@ -588,23 +1035,26 @@ function ExpandableRecipeRow({
       )}
 
       {isExpanded && recipe.recipe_ingredients.map((ing) => {
-        const linkedRecipeId =
+        const linkedRecipe =
           ing.type === "Prep recipe" && ing.reference_guid
-            ? guidToRecipeId.get(ing.reference_guid)
+            ? guidToRecipe.get(ing.reference_guid)
             : undefined;
 
         return (
           <TableRow key={ing.id} className="bg-muted/30">
             <TableCell className="pl-10 text-sm">
               <span className="flex items-center gap-1.5">
-                {linkedRecipeId != null ? (
-                  <a
-                    href={`#recipe-${linkedRecipeId}`}
+                {linkedRecipe ? (
+                  <button
+                    type="button"
                     className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate(linkedRecipe.id);
+                    }}
                   >
                     {ing.name}
-                  </a>
+                  </button>
                 ) : (
                   ing.name
                 )}
