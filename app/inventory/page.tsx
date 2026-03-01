@@ -860,9 +860,9 @@ export default function InventoryPage() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {/* Summary cards */}
+      {/* Summary cards — hidden on mobile */}
       {summary && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="hidden md:grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">

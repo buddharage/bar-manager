@@ -31,7 +31,6 @@ interface Recipe {
   name: string;
   type: string;
   recipe_group: string | null;
-  status: string | null;
   menu_price: number | null;
   prime_cost: number | null;
   food_cost_pct: number | null;
@@ -53,7 +52,6 @@ interface Recipe {
 type SortKey =
   | "name"
   | "type"
-  | "status"
   | "menu_price"
   | "prime_cost"
   | "food_cost_pct"
@@ -190,7 +188,7 @@ function SortableHead({
 // Main RecipeList component
 // ---------------------------------------------------------------------------
 
-const COL_COUNT = 9; // total visible columns
+const COL_COUNT = 8; // total visible columns
 
 export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
   const [recipes, setRecipes] = useState(initialRecipes);
@@ -412,7 +410,6 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
                   <TableRow>
                     <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
                     <SortableHead label="Type" sortKey="type" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Status" sortKey="status" currentSort={sort} onSort={handleSort} />
                     <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
                     <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
                     <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
@@ -496,9 +493,6 @@ function ExpandableRecipeRow({
           >
             {recipe.type === "prep_recipe" ? "Prep" : "Recipe"}
           </Badge>
-        </TableCell>
-        <TableCell className="text-sm text-muted-foreground">
-          {recipe.status || "—"}
         </TableCell>
         <TableCell className="text-right">
           {recipe.menu_price != null
@@ -626,7 +620,7 @@ function ExpandableRecipeRow({
             <TableCell className="text-sm text-right">
               {ing.cost != null ? `$${Number(ing.cost).toFixed(4)}` : "—"}
             </TableCell>
-            <TableCell colSpan={3} />
+            <TableCell colSpan={2} />
           </TableRow>
         );
       })}

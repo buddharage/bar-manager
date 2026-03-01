@@ -80,12 +80,7 @@ export async function syncXtrachefRecipes(
     if (localRecipes && localRecipes.length > 0) {
       const idsToDelete = localRecipes.map((r: { id: number }) => r.id);
 
-      // Delete their ingredient lines first
-      for (const id of idsToDelete) {
-        await supabase.from("recipe_ingredients").delete().eq("recipe_id", id);
-      }
-
-      // Delete the recipes
+      // Delete the recipes (recipe_ingredients cascade-deletes automatically)
       const { error: delErr } = await supabase
         .from("recipes")
         .delete()

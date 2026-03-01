@@ -34,7 +34,6 @@ export default async function RecipesPage() {
     name: string;
     type: string;
     recipe_group: string | null;
-    status: string | null;
     menu_price: number | null;
     prime_cost: number | null;
     food_cost_pct: number | null;
