@@ -71,6 +71,7 @@ const DETAIL_101 = {
       batchSize: null,
       batchUomId: null,
       batchUomName: null,
+      notes: "Shake vigorously with ice",
     },
     stats: { menuPrice: 14, foodCost: 3.5, foodCostPercent: 25 },
     ingredients: [
@@ -101,6 +102,19 @@ const DETAIL_101 = {
         cost: 0.5,
       },
     ],
+    procedure: {
+      imageUrl: "https://img.xtrachef.com/margarita.jpg",
+      imageName: "margarita.jpg",
+      s3Reference: "s3://recipes/margarita.jpg",
+      instructions: [
+        { type: "English", data: "Combine ingredients, shake with ice, strain into glass" },
+        { type: "Others", data: "" },
+      ],
+      prepTime: 5,
+      prepTimeUom: "mins",
+      cookTime: null,
+      cookTimeUom: "mins",
+    },
   },
   exception: null,
 };
@@ -122,6 +136,7 @@ const DETAIL_202 = {
       batchSize: 32,
       batchUomId: 5,
       batchUomName: "oz",
+      notes: "",
     },
     stats: { menuPrice: 0, foodCost: 1.2, foodCostPercent: 0 },
     ingredients: [
@@ -139,6 +154,19 @@ const DETAIL_202 = {
         cost: 0.6,
       },
     ],
+    procedure: {
+      imageUrl: null,
+      imageName: null,
+      s3Reference: "",
+      instructions: [
+        { type: "English", data: "Dissolve sugar in equal parts hot water" },
+        { type: "Others", data: "" },
+      ],
+      prepTime: null,
+      prepTimeUom: "mins",
+      cookTime: null,
+      cookTimeUom: "mins",
+    },
   },
   exception: null,
 };
@@ -342,6 +370,36 @@ describe("XtrachefClient", () => {
       expect(margarita.prime_cost).toBe(3.5);
       expect(margarita.food_cost_pct).toBe(25);
       expect(margarita.toast_item_guid).toBe("toast-guid-1");
+      expect(margarita.notes).toBe("Shake vigorously with ice");
+      expect(margarita.image_url).toBe("https://img.xtrachef.com/margarita.jpg");
+      expect(margarita.instructions).toBe("Combine ingredients, shake with ice, strain into glass");
+    });
+
+    it("maps notes, image_url, and instructions from detail", async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse(SUMMARY_RESPONSE))
+        .mockResolvedValueOnce(jsonResponse(DETAIL_101))
+        .mockResolvedValueOnce(jsonResponse(DETAIL_202));
+
+      const client = new XtrachefClient({
+        tenantId: "39494",
+        locationId: "12802",
+        token: "test-token",
+      });
+
+      const results = await client.fetchAllRecipes();
+
+      // Margarita has notes, image, and instructions
+      const margarita = results[0].recipe;
+      expect(margarita.notes).toBe("Shake vigorously with ice");
+      expect(margarita.image_url).toBe("https://img.xtrachef.com/margarita.jpg");
+      expect(margarita.instructions).toBe("Combine ingredients, shake with ice, strain into glass");
+
+      // Simple Syrup has empty notes (→ null), no image, but has instructions
+      const syrup = results[1].recipe;
+      expect(syrup.notes).toBeNull(); // empty string → null
+      expect(syrup.image_url).toBeNull();
+      expect(syrup.instructions).toBe("Dissolve sugar in equal parts hot water");
     });
 
     it("maps ingredient fields correctly", async () => {

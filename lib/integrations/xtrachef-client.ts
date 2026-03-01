@@ -69,6 +69,17 @@ export interface XCIngredientLine {
   cost: number;
 }
 
+export interface XCProcedure {
+  imageUrl: string | null;
+  imageName: string | null;
+  s3Reference: string;
+  instructions: Array<{ type: string; data: string }>;
+  prepTime: number | null;
+  prepTimeUom: string;
+  cookTime: number | null;
+  cookTimeUom: string;
+}
+
 export interface XCRecipeDetail {
   id: number;
   guid: string;
@@ -85,6 +96,7 @@ export interface XCRecipeDetail {
     batchSize: number | null;
     batchUomId: number | null;
     batchUomName: string | null;
+    notes: string | null;
   };
   stats: {
     menuPrice: number;
@@ -92,6 +104,7 @@ export interface XCRecipeDetail {
     foodCostPercent: number;
   };
   ingredients: XCIngredientLine[];
+  procedure?: XCProcedure;
 }
 
 interface XCRecipeDetailResponse {
@@ -117,6 +130,9 @@ export interface RecipeRow {
   serving_size: number | null;
   batch_size: number | null;
   batch_uom: string | null;
+  notes: string | null;
+  image_url: string | null;
+  instructions: string | null;
   last_modified_at: string | null;
   last_modified_by: string | null;
 }
@@ -246,6 +262,10 @@ export class XtrachefClient {
         const type: "recipe" | "prep_recipe" =
           summary.type === "Prep Recipe" ? "prep_recipe" : "recipe";
 
+        // Extract English instructions from procedure
+        const englishInstructions = detail.procedure?.instructions
+          ?.find((i) => i.type === "English")?.data || null;
+
         const recipe: RecipeRow = {
           xtrachef_id: summary.recipeId,
           xtrachef_guid: summary.guid,
@@ -260,6 +280,9 @@ export class XtrachefClient {
           serving_size: detail.basicDetail.servingSize || null,
           batch_size: detail.basicDetail.batchSize || null,
           batch_uom: detail.basicDetail.batchUomName || null,
+          notes: detail.basicDetail.notes || null,
+          image_url: detail.procedure?.imageUrl || null,
+          instructions: englishInstructions || null,
           last_modified_at: detail.lastModified ? new Date(detail.lastModified).toISOString() : null,
           last_modified_by: detail.lastModifiedBy || summary.lastModifiedBy || null,
         };
