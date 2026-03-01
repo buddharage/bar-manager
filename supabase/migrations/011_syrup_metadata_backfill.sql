@@ -1,7 +1,4 @@
 -- Backfill refrigerate and created_at_label for Syrups group recipes.
---
--- Note: This migration was created from a partial list. Additional entries
--- may need to be appended if recipes were cut off.
 
 update recipes set refrigerate = true, created_at_label = '2025 Fall' where name = 'Agave Wine Infusion' and recipe_group = 'Syrups';
 update recipes set refrigerate = false, created_at_label = '2022 Fall' where name = 'Agave Syrup' and recipe_group = 'Syrups';
@@ -45,4 +42,9 @@ update recipes set refrigerate = false, created_at_label = '2022 Fall' where nam
 update recipes set refrigerate = false, created_at_label = '2025 Spring' where name = 'Saline' and recipe_group = 'Syrups';
 update recipes set refrigerate = false, created_at_label = '2023 Fall' where name = 'Shisho Infused Gin' and recipe_group = 'Syrups';
 update recipes set refrigerate = false, created_at_label = '2022 Fall' where name = 'Spicy Bitters' and recipe_group = 'Syrups';
--- NOTE: List was truncated at "Strawberry Infused" — add remaining entries below.
+update recipes set refrigerate = false, created_at_label = '2023 Spring' where name = 'Strawberry Infused Gin' and recipe_group = 'Syrups';
+update recipes set refrigerate = false, created_at_label = '2023 Fall' where name = 'Tonka Vodka' and recipe_group = 'Syrups';
+update recipes set refrigerate = true, created_at_label = '2023 Fall' where name = 'Vanilla Syrup' and recipe_group = 'Syrups';
+update recipes set refrigerate = true, created_at_label = '2022 Fall' where name = 'Verdito' and recipe_group = 'Syrups';
+update recipes set refrigerate = true, created_at_label = '2023 Spring' where name = 'Watermelon Ice' and recipe_group = 'Syrups';
+update recipes set refrigerate = true, created_at_label = '2023 Spring' where name = 'Watermelon Syrup' and recipe_group = 'Syrups';
