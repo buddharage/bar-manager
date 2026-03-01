@@ -42,6 +42,13 @@ The app will not work until the database tables are created. Run each migration 
 4. `supabase/migrations/003_order_items_category_size.sql` — Order items category/size fields
 5. `supabase/migrations/004_recipes.sql` — xtraCHEF recipes, recipe ingredients, and raw ingredients
 6. `supabase/migrations/005_inventory_rework.sql` — Ingredient-based inventory tracking, count history, unit conversions
+7. `supabase/migrations/006_recipe_notes_instructions.sql` — Recipe notes, images, and instructions
+8. `supabase/migrations/007_recipe_editable_fields.sql` — User-editable recipe fields (on_menu, creator, created_at_label)
+9. `supabase/migrations/008_recipe_sync_lifecycle.sql` — Sync lifecycle (add/update/delete), stale recipe cleanup
+10. `supabase/migrations/009_recipe_metadata_backfill.sql` — Cocktail recipe creator and era metadata
+11. `supabase/migrations/010_recipe_refrigerate_cocktail_batch.sql` — Cocktail batch refrigerate flags and metadata
+12. `supabase/migrations/011_syrup_metadata_backfill.sql` — Syrup recipe metadata backfill
+13. `supabase/migrations/012_gift_cards.sql` — Gift card tracking table
 
 For each file: copy the full contents, paste into the SQL Editor, and click **Run**. You must run them in order because later migrations may depend on earlier ones.
 
@@ -116,15 +123,18 @@ Add these secrets to your GitHub repo (**Settings → Secrets and variables → 
 | `APP_URL` | `https://your-app.vercel.app` |
 | `CRON_SECRET` | Same value as in Vercel |
 
-The cron schedule:
+The cron schedule (defined in `.github/workflows/daily-sync.yml`):
 
 | Job | Schedule | Route |
 |-----|----------|-------|
 | Google Drive sync | Daily at 3 AM ET | `/api/sync/google` |
-| Gmail sync | Every 6 hours | `/api/sync/gmail` |
 | Toast sync | Daily at 6 AM ET | `/api/sync/toast` |
 
-You can also trigger all syncs manually from the GitHub Actions tab or from the **Settings** page in the app (no secret prompt needed — uses your login session).
+> **Note:** Gmail is searched live by the AI chat agent — there is no scheduled Gmail sync.
+
+A stub workflow for monthly tax prep (`.github/workflows/tax-filing.yml`) also exists and will run on the 1st of each month once Phase 2 is complete.
+
+You can also trigger syncs manually from the GitHub Actions tab or from the **Settings** page in the app (no secret prompt needed — uses your login session).
 
 ### 7. Set up inventory tracking
 
@@ -189,11 +199,11 @@ Imports recipes, prep recipes, and ingredients from xtraCHEF (Toast's recipe man
 
 | Phase | Status | Scope |
 |-------|--------|-------|
-| **1 — Inventory + Toast** | Done | Dashboard, ingredient-based inventory with expected usage tracking, par levels, unit conversions, count history, low-stock alerts, AI reorder suggestions, daily sync, xtraCHEF recipe sync |
+| **1 — Inventory + Toast** | Done | Dashboard, ingredient-based inventory with expected usage tracking, par levels, unit conversions, count history, low-stock alerts, AI reorder suggestions, daily sync, historical backfill, xtraCHEF recipe sync with lifecycle management, recipe editing (on_menu, creator, refrigerate), menu sales analytics, gift card tracking |
 | **2 — QBO + Sales Tax** | Stubbed | QuickBooks journal entries, NYC ST-100 tax worksheet, monthly filing reminders |
 | **3 — Sling + Payroll** | Stubbed | AI scheduling, time entry tracking, payroll pre-fill |
-| **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling |
-| **Google Workspace** | Done | Drive + Gmail sync, full-text document search, AI-powered PDF extraction |
+| **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling, vector-based document search with embedding cache |
+| **Google Workspace** | Done | Drive + Gmail sync, document chunking + vector embeddings, semantic document search, AI-powered PDF extraction |
 
 ## Project Structure
 
@@ -204,6 +214,8 @@ app/
   inventory/              Ingredient inventory: counts, expected usage, par levels, unit conversions
   inventory/alerts/       Low-stock alerts + AI reorder suggestions (ingredient + Toast stock)
   recipes/                Recipes + prep recipes from xtraCHEF
+  menu/sales/             Menu item sales analytics with date filtering, sorting, and category grouping
+  gift-cards/             Gift card balance and liability tracking
   chat/                   Conversational AI interface
   settings/               Integration status, Google connect, xtraCHEF token, sync history
   tax/                    Sales tax worksheet (Phase 2)
@@ -212,12 +224,16 @@ app/
   payroll/                Payroll dashboard (Phase 3)
   api/
     auth/session/         Login/logout (password → signed cookie)
-    auth/google/          Google OAuth2 flow (consent + callback)
+    auth/google/          Google OAuth2 flow (consent + callback + status)
     sync/toast/           Daily Toast sync endpoint
+    sync/toast/backfill/  Backfill historical Toast order data for a date range (max 90 days)
     sync/google/          Google Drive sync endpoint
     sync/gmail/           Gmail sync endpoint
     sync/xtrachef/        xtraCHEF recipe sync endpoint
     inventory/            Inventory CRUD, manual counts, expected recalculation
+    menu-sales/           Menu sales aggregation with date filtering + item normalization
+    recipes/[id]/         Recipe detail editing (on_menu, creator, created_at_label, refrigerate)
+    gift-cards/           Gift card CRUD
     webhooks/toast/       Real-time Toast stock webhook
     ai/chat/              Gemini chat endpoint
     ai/reorder/           AI reorder suggestions endpoint
@@ -226,9 +242,13 @@ lib/
   auth/                   Session token (HMAC-SHA256) + request verification
   integrations/           Toast, Google, xtraCHEF, QBO, Sling API clients
   inventory/              Expected inventory calculation engine
-  sync/                   Shared sync logic (xtraCHEF recipes)
+  sync/                   Toast order sync + xtraCHEF recipe sync logic
+  menu-sales/             Date range presets and filtering utilities
   units.ts                Unit conversion (ml/oz/volume/weight + purchase units)
-  ai/                     Gemini Flash agent with tool-calling
+  ai/
+    agent.ts              Gemini Flash agent with function-calling tools
+    embeddings.ts         Document chunking + vector embeddings + similarity search
+    token-cache.ts        LRU caching for embeddings, RAG results, and tool call responses
   tax/                    NYC sales tax calculator
   supabase/               DB clients and TypeScript types
 
