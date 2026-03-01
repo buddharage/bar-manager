@@ -15,6 +15,7 @@ import { verifyToken } from "@/lib/auth/session";
 const BEER_ALIASES: Record<string, string> = {
   "high life": "Miller High Life",
   "miller high life": "Miller High Life",
+  "tecate": "Tecate",
 };
 
 function normalizeItemName(name: string, category?: string): string {
