@@ -52,11 +52,11 @@ interface Recipe {
 
 type SortKey =
   | "name"
-  | "type"
   | "menu_price"
   | "prime_cost"
   | "food_cost_pct"
   | "on_menu"
+  | "refrigerate"
   | "creator"
   | "created_at_label";
 type SortDir = "asc" | "desc";
@@ -410,11 +410,11 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
                 <TableHeader>
                   <TableRow>
                     <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Type" sortKey="type" currentSort={sort} onSort={handleSort} />
                     <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
                     <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
                     <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
                     <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
+                    <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
                     <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
                     <SortableHead label="Created At" sortKey="created_at_label" currentSort={sort} onSort={handleSort} />
                   </TableRow>
@@ -488,13 +488,6 @@ function ExpandableRecipeRow({
             {recipe.name}
           </span>
         </TableCell>
-        <TableCell>
-          <Badge
-            variant={recipe.type === "prep_recipe" ? "default" : "secondary"}
-          >
-            {recipe.type === "prep_recipe" ? "Prep" : "Recipe"}
-          </Badge>
-        </TableCell>
         <TableCell className="text-right">
           {recipe.menu_price != null
             ? `$${Number(recipe.menu_price).toFixed(2)}`
@@ -520,6 +513,20 @@ function ExpandableRecipeRow({
             }}
           >
             {recipe.on_menu ? "Yes" : "No"}
+          </Badge>
+        </TableCell>
+
+        {/* Refrigerate — click to toggle */}
+        <TableCell>
+          <Badge
+            variant={recipe.refrigerate ? "default" : "outline"}
+            className="cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdate(recipe.id, "refrigerate", !recipe.refrigerate);
+            }}
+          >
+            {recipe.refrigerate ? "Yes" : "No"}
           </Badge>
         </TableCell>
 
@@ -589,28 +596,24 @@ function ExpandableRecipeRow({
         return (
           <TableRow key={ing.id} className="bg-muted/30">
             <TableCell className="pl-10 text-sm">
-              {linkedRecipeId != null ? (
-                <a
-                  href={`#recipe-${linkedRecipeId}`}
-                  className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {ing.name}
-                </a>
-              ) : (
-                ing.name
-              )}
-            </TableCell>
-            <TableCell>
-              {ing.type === "Prep recipe" ? (
-                <Badge variant="outline" className="text-xs">
-                  prep
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground text-xs">
-                  {ing.type}
-                </span>
-              )}
+              <span className="flex items-center gap-1.5">
+                {linkedRecipeId != null ? (
+                  <a
+                    href={`#recipe-${linkedRecipeId}`}
+                    className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {ing.name}
+                  </a>
+                ) : (
+                  ing.name
+                )}
+                {ing.type === "Prep recipe" && (
+                  <Badge variant="outline" className="text-xs">
+                    prep
+                  </Badge>
+                )}
+              </span>
             </TableCell>
             <TableCell className="text-sm text-right">
               {ing.quantity ?? "—"}
@@ -621,7 +624,7 @@ function ExpandableRecipeRow({
             <TableCell className="text-sm text-right">
               {ing.cost != null ? `$${Number(ing.cost).toFixed(4)}` : "—"}
             </TableCell>
-            <TableCell colSpan={2} />
+            <TableCell colSpan={3} />
           </TableRow>
         );
       })}
