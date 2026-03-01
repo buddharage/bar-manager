@@ -35,6 +35,20 @@ interface Summary {
   categories: number;
 }
 
+// SVG icon components for reuse
+const SettingsIcon = ({ size = 14 }: { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+);
+
+const HistoryIcon = ({ size = 14 }: { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+);
+
+// Expected inventory icon (box/package icon) for mobile column header
+const ExpectedIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+);
+
 // ---------------------------------------------------------------------------
 // Dialogs
 // ---------------------------------------------------------------------------
@@ -111,6 +125,7 @@ function CountDialog({
             <Label htmlFor="count-input">Quantity</Label>
             <Input
               id="count-input"
+              inputMode="decimal"
               placeholder={
                 hasConversion
                   ? `e.g. "2 ${ingredient.purchase_unit}s" or "500 ${ingredient.unit}"`
@@ -370,13 +385,13 @@ function HistoryDialog({
                       {new Date(c.counted_at).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {c.quantity_raw || "—"}
+                      {c.quantity_raw || "\u2014"}
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {c.quantity}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {c.note || "—"}
+                      {c.note || "\u2014"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -386,6 +401,135 @@ function HistoryDialog({
         )}
 
         <DialogFooter showCloseButton />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobile ingredient detail dialog
+// ---------------------------------------------------------------------------
+
+function IngredientDetailDialog({
+  ingredient,
+  open,
+  onOpenChange,
+  onOpenSettings,
+  onOpenHistory,
+}: {
+  ingredient: IngredientWithAlerts | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpenSettings: (item: IngredientWithAlerts) => void;
+  onOpenHistory: (item: IngredientWithAlerts) => void;
+}) {
+  if (!ingredient) return null;
+
+  const status = statusForIngredient(ingredient);
+  const isBelowPar =
+    ingredient.par_level != null &&
+    ingredient.expected_quantity != null &&
+    ingredient.expected_quantity <= ingredient.par_level;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{ingredient.name}</DialogTitle>
+          <DialogDescription>
+            {ingredient.category || "Uncategorized"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Expected Inventory</p>
+              <p className={`text-sm font-medium ${isBelowPar ? "text-destructive" : ""}`}>
+                {ingredient.expected_quantity != null ? (
+                  <>
+                    {ingredient.expected_quantity} {ingredient.unit || ""}
+                    {ingredient.purchase_unit && ingredient.purchase_unit_quantity ? (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({Math.round(baseToPurchase(ingredient.expected_quantity, ingredient.purchase_unit_quantity) * 100) / 100} {ingredient.purchase_unit}s)
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  "\u2014"
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Par Level</p>
+              <p className="text-sm font-medium">
+                {ingredient.par_level != null
+                  ? `${ingredient.par_level} ${ingredient.unit || ""}`
+                  : "\u2014"}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Last Count</p>
+              <p className="text-sm">
+                {ingredient.last_counted_at ? (
+                  <>
+                    {ingredient.current_quantity} {ingredient.unit || ""}
+                    {ingredient.purchase_unit && ingredient.purchase_unit_quantity ? (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({Math.round(baseToPurchase(ingredient.current_quantity, ingredient.purchase_unit_quantity) * 100) / 100} {ingredient.purchase_unit}s)
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  "\u2014"
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Status</p>
+              <Badge variant={status.variant}>{status.label}</Badge>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-muted-foreground">Counted At</p>
+            <p className="text-sm">
+              {ingredient.last_counted_at
+                ? new Date(ingredient.last_counted_at).toLocaleDateString()
+                : "Never"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-2 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => {
+              onOpenChange(false);
+              onOpenSettings(ingredient);
+            }}
+          >
+            <SettingsIcon size={14} />
+            <span className="ml-1.5">Conversion Settings</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => {
+              onOpenChange(false);
+              onOpenHistory(ingredient);
+            }}
+          >
+            <HistoryIcon size={14} />
+            <span className="ml-1.5">Count History</span>
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -425,11 +569,48 @@ function statusForIngredient(ing: IngredientWithAlerts): {
 }
 
 // ---------------------------------------------------------------------------
-// Main Page
+// Sort header (consistent with recipe table style)
 // ---------------------------------------------------------------------------
 
 type SortField = "name" | "expected_quantity" | "par_level" | "status";
 type SortDir = "asc" | "desc";
+
+function SortableHead({
+  label,
+  field,
+  currentField,
+  currentDir,
+  onSort,
+  className,
+  children,
+}: {
+  label?: string;
+  field: SortField;
+  currentField: SortField;
+  currentDir: SortDir;
+  onSort: (field: SortField) => void;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const active = currentField === field;
+  const arrow = active ? (currentDir === "asc" ? " \u25B2" : " \u25BC") : "";
+
+  return (
+    <TableHead
+      className={`cursor-pointer select-none hover:text-foreground ${className || ""}`}
+      onClick={() => onSort(field)}
+    >
+      {children || label}
+      {arrow && <span className="text-xs ml-0.5">{arrow}</span>}
+    </TableHead>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
+
+const COL_COUNT = 8; // total visible columns on desktop
 
 export default function InventoryPage() {
   const [items, setItems] = useState<IngredientWithAlerts[]>([]);
@@ -446,6 +627,7 @@ export default function InventoryPage() {
   const [countDialogItem, setCountDialogItem] = useState<IngredientWithAlerts | null>(null);
   const [settingsDialogItem, setSettingsDialogItem] = useState<IngredientWithAlerts | null>(null);
   const [historyDialogItem, setHistoryDialogItem] = useState<IngredientWithAlerts | null>(null);
+  const [detailDialogItem, setDetailDialogItem] = useState<IngredientWithAlerts | null>(null);
 
   const fetchInventory = useCallback(async () => {
     setLoading(true);
@@ -532,27 +714,6 @@ export default function InventoryPage() {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [sorted, groupByCategory]);
 
-  function SortBtn({
-    field,
-    children,
-  }: {
-    field: SortField;
-    children: React.ReactNode;
-  }) {
-    return (
-      <button
-        type="button"
-        className="inline-flex items-center hover:text-foreground transition-colors"
-        onClick={() => handleSort(field)}
-      >
-        {children}
-        <span className="ml-1">
-          {sortField === field ? (sortDir === "asc" ? "\u2191" : "\u2193") : "\u2195"}
-        </span>
-      </button>
-    );
-  }
-
   function renderRow(item: IngredientWithAlerts) {
     const status = statusForIngredient(item);
     const isBelowPar =
@@ -565,11 +726,41 @@ export default function InventoryPage() {
         key={item.id}
         className={isBelowPar ? "bg-destructive/5" : undefined}
       >
-        <TableCell className="font-medium">{item.name}</TableCell>
-        <TableCell className="text-muted-foreground text-sm">
-          {item.category || "—"}
+        {/* Name — tappable on mobile to open detail modal */}
+        <TableCell className="font-medium">
+          <span
+            className="md:cursor-default cursor-pointer md:no-underline underline underline-offset-2"
+            onClick={() => setDetailDialogItem(item)}
+          >
+            {item.name}
+          </span>
         </TableCell>
-        <TableCell className="text-right">
+
+        {/* Expected Inventory (2nd column) */}
+        <TableCell
+          className={`text-right font-medium ${isBelowPar ? "text-destructive" : ""}`}
+        >
+          {item.expected_quantity != null ? (
+            <span>
+              {item.expected_quantity} <span className="hidden md:inline">{item.unit || ""}</span>
+              {item.purchase_unit && item.purchase_unit_quantity ? (
+                <span className="hidden md:inline text-xs text-muted-foreground ml-1">
+                  ({Math.round(baseToPurchase(item.expected_quantity, item.purchase_unit_quantity) * 100) / 100} {item.purchase_unit}s)
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{"\u2014"}</span>
+          )}
+        </TableCell>
+
+        {/* Category — hidden on mobile */}
+        <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+          {item.category || "\u2014"}
+        </TableCell>
+
+        {/* Last Count — hidden on mobile */}
+        <TableCell className="hidden md:table-cell text-right">
           {item.last_counted_at ? (
             <span title={`Counted: ${new Date(item.last_counted_at).toLocaleString()}`}>
               {item.current_quantity} {item.unit || ""}
@@ -580,42 +771,34 @@ export default function InventoryPage() {
               ) : null}
             </span>
           ) : (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">{"\u2014"}</span>
           )}
         </TableCell>
-        <TableCell
-          className={`text-right font-medium ${isBelowPar ? "text-destructive" : ""}`}
-        >
-          {item.expected_quantity != null ? (
-            <span>
-              {item.expected_quantity} {item.unit || ""}
-              {item.purchase_unit && item.purchase_unit_quantity ? (
-                <span className="text-xs text-muted-foreground ml-1">
-                  ({Math.round(baseToPurchase(item.expected_quantity, item.purchase_unit_quantity) * 100) / 100} {item.purchase_unit}s)
-                </span>
-              ) : null}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell className="text-right">
+
+        {/* Par Level — hidden on mobile */}
+        <TableCell className="hidden md:table-cell text-right">
           {item.par_level != null ? (
             <span>
               {item.par_level} {item.unit || ""}
             </span>
           ) : (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">{"\u2014"}</span>
           )}
         </TableCell>
-        <TableCell>
+
+        {/* Status — hidden on mobile */}
+        <TableCell className="hidden md:table-cell">
           <Badge variant={status.variant}>{status.label}</Badge>
         </TableCell>
-        <TableCell className="text-right text-sm text-muted-foreground">
+
+        {/* Counted At — hidden on mobile */}
+        <TableCell className="hidden md:table-cell text-right text-sm text-muted-foreground">
           {item.last_counted_at
             ? new Date(item.last_counted_at).toLocaleDateString()
             : "Never"}
         </TableCell>
+
+        {/* Actions */}
         <TableCell className="text-right">
           <div className="flex justify-end gap-1">
             <Button
@@ -625,21 +808,24 @@ export default function InventoryPage() {
             >
               Count
             </Button>
+            {/* Settings & History — hidden on mobile (available in detail modal) */}
             <Button
               variant="ghost"
               size="sm"
+              className="hidden md:inline-flex"
               onClick={() => setSettingsDialogItem(item)}
               title="Settings"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              <SettingsIcon />
             </Button>
             <Button
               variant="ghost"
               size="sm"
+              className="hidden md:inline-flex"
               onClick={() => setHistoryDialogItem(item)}
               title="Count history"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <HistoryIcon />
             </Button>
           </div>
         </TableCell>
@@ -661,7 +847,7 @@ export default function InventoryPage() {
             {recalculating ? "Recalculating..." : "Recalculate Expected"}
           </Button>
           {summary && (
-            <div className="flex gap-2">
+            <div className="hidden md:flex gap-2">
               <Badge variant="secondary">{summary.total} ingredients</Badge>
               <Badge variant="secondary">{summary.counted} counted</Badge>
               {summary.belowPar > 0 && (
@@ -757,21 +943,43 @@ export default function InventoryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>
-                    <SortBtn field="name">Name</SortBtn>
-                  </TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Last Count</TableHead>
-                  <TableHead className="text-right">
-                    <SortBtn field="expected_quantity">Expected Inventory</SortBtn>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortBtn field="par_level">Par Level</SortBtn>
-                  </TableHead>
-                  <TableHead>
-                    <SortBtn field="status">Status</SortBtn>
-                  </TableHead>
-                  <TableHead className="text-right">Counted At</TableHead>
+                  <SortableHead
+                    label="Name"
+                    field="name"
+                    currentField={sortField}
+                    currentDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHead
+                    field="expected_quantity"
+                    currentField={sortField}
+                    currentDir={sortDir}
+                    onSort={handleSort}
+                    className="text-right"
+                  >
+                    {/* Icon on mobile, full text on desktop */}
+                    <span className="md:hidden inline-flex items-center" title="Expected Inventory"><ExpectedIcon /></span>
+                    <span className="hidden md:inline">Expected Inventory</span>
+                  </SortableHead>
+                  <TableHead className="hidden md:table-cell">Category</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Last Count</TableHead>
+                  <SortableHead
+                    label="Par Level"
+                    field="par_level"
+                    currentField={sortField}
+                    currentDir={sortDir}
+                    onSort={handleSort}
+                    className="hidden md:table-cell text-right"
+                  />
+                  <SortableHead
+                    label="Status"
+                    field="status"
+                    currentField={sortField}
+                    currentDir={sortDir}
+                    onSort={handleSort}
+                    className="hidden md:table-cell"
+                  />
+                  <TableHead className="hidden md:table-cell text-right">Counted At</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -780,7 +988,7 @@ export default function InventoryPage() {
                   ? groups.map(([category, groupItems]) => (
                       <Fragment key={category}>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
-                          <TableCell colSpan={8} className="font-semibold">
+                          <TableCell colSpan={COL_COUNT} className="font-semibold">
                             {category}
                             <span className="ml-2 text-muted-foreground font-normal text-sm">
                               ({groupItems.length} ingredient{groupItems.length !== 1 ? "s" : ""})
@@ -814,6 +1022,13 @@ export default function InventoryPage() {
         ingredient={historyDialogItem}
         open={!!historyDialogItem}
         onOpenChange={(open) => !open && setHistoryDialogItem(null)}
+      />
+      <IngredientDetailDialog
+        ingredient={detailDialogItem}
+        open={!!detailDialogItem}
+        onOpenChange={(open) => !open && setDetailDialogItem(null)}
+        onOpenSettings={setSettingsDialogItem}
+        onOpenHistory={setHistoryDialogItem}
       />
     </div>
   );

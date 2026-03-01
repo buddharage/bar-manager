@@ -84,6 +84,13 @@ function createMockSupabase() {
               }),
             };
           }),
+          // For stale recipe deletion query
+          select: vi.fn(() => ({
+            not: vi.fn().mockResolvedValue({ data: [], error: null }),
+          })),
+          delete: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ error: null }),
+          })),
         };
       }
 
@@ -336,6 +343,12 @@ describe("syncXtrachefRecipes", () => {
                   error: { message: "duplicate key" },
                 }),
               }),
+            })),
+            select: vi.fn(() => ({
+              not: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+            delete: vi.fn(() => ({
+              in: vi.fn().mockResolvedValue({ error: null }),
             })),
           };
         }
