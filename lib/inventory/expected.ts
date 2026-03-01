@@ -14,7 +14,7 @@
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
-import { toBaseUnit } from "@/lib/units";
+import { toBaseUnit } from "../units";
 
 interface Ingredient {
   id: number;
