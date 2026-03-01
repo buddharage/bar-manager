@@ -1,0 +1,346 @@
+# Syncing Notes
+
+For syncing, here is more info.
+
+## Recipe Summary Fetch
+
+- Page: `https://app.sa.toasttab.com/Recipe/Recipe/NewRecipe`
+- Fetch URL: `https://ecs-api-prod.sa.toasttab.com/api.recipes-query/api/1.0/recipes-v2/tenants/39494/location/12802/recipe-summary?isReGenerate=true`
+
+### Data structure
+
+```json
+{
+  "data": {
+    "totalRowCount": 140,
+    "costLabel": "Food Cost",
+    "recipes": [
+      {
+        "rowNumber": 1,
+        "recipeId": 2388247,
+        "guid": "518e03a4-62f4-4605-aa1f-6ce5d7f84853",
+        "recipe": "Holy Mole Batch",
+        "status": "DRAFT",
+        "recipeGroups": "Cocktail Batch",
+        "type": "Prep Recipe",
+        "grossMargin": "-373.7102008853017",
+        "menuPrice": "13",
+        "primeCost": "61.58232611508922",
+        "lastModified": "Oct 15, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": null,
+        "externalMenuItemGuid": null,
+        "foodCostPercent": "473.7102008853016"
+      },
+      {
+        "rowNumber": 2,
+        "recipeId": 2307050,
+        "guid": "3eaf511b-7753-45dd-822a-a45a77866d1a",
+        "recipe": "Holy Mole",
+        "status": "COMPLETE",
+        "recipeGroups": "Cocktail",
+        "type": "Recipe",
+        "grossMargin": "87.06834581346912",
+        "menuPrice": "13",
+        "primeCost": "1.6811150442490148",
+        "lastModified": "Oct 15, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": "500000057102052866",
+        "externalMenuItemGuid": "5d22cc66-ed02-412b-a323-5ee0bc2ac89d",
+        "foodCostPercent": "12.931654186530883"
+      },
+      {
+        "rowNumber": 3,
+        "recipeId": 2295970,
+        "guid": "223dc919-7846-441f-a669-e470e347fbd3",
+        "recipe": "Basil Syrup",
+        "status": "COMPLETE",
+        "recipeGroups": "Syrups",
+        "type": "Prep Recipe",
+        "grossMargin": "0",
+        "menuPrice": null,
+        "primeCost": "3.06137272727272",
+        "lastModified": "Oct 15, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": null,
+        "externalMenuItemGuid": null,
+        "foodCostPercent": "0"
+      },
+      {
+        "rowNumber": 4,
+        "recipeId": 2295960,
+        "guid": "ee97c2c1-9ae6-4ee0-9332-e6200c375be6",
+        "recipe": "Lovespell",
+        "status": "DRAFT",
+        "recipeGroups": "Cocktail",
+        "type": "Recipe",
+        "grossMargin": "73.95965296731914",
+        "menuPrice": "13",
+        "primeCost": "3.385245114248511",
+        "lastModified": "Sep 19, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": "500000056984926333",
+        "externalMenuItemGuid": "c1e64519-d17d-4b16-b88d-afeaa564cf4c",
+        "foodCostPercent": "26.040347032680856"
+      },
+      {
+        "rowNumber": 5,
+        "recipeId": 2295974,
+        "guid": "30585694-8e89-4b72-9da8-8f0d53047f2d",
+        "recipe": "Chai Concentrate",
+        "status": "DRAFT",
+        "recipeGroups": "Syrups",
+        "type": "Prep Recipe",
+        "grossMargin": "97.13846153846154",
+        "menuPrice": "13",
+        "primeCost": "0.372",
+        "lastModified": "Sep 19, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": null,
+        "externalMenuItemGuid": null,
+        "foodCostPercent": "2.8615384615384616"
+      },
+      {
+        "rowNumber": 6,
+        "recipeId": 2295981,
+        "guid": "ce3986c2-0bf1-4ff7-920e-b232774dc750",
+        "recipe": "Preacher's Daughter",
+        "status": "DRAFT",
+        "recipeGroups": "Cocktail",
+        "type": "Recipe",
+        "grossMargin": "86.79441463099084",
+        "menuPrice": "13",
+        "primeCost": "1.7167260979711902",
+        "lastModified": "Sep 19, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": "500000056984926337",
+        "externalMenuItemGuid": "da2f989f-b4ca-46e8-90d9-d3332ec612e4",
+        "foodCostPercent": "13.205585369009157"
+      },
+      {
+        "rowNumber": 7,
+        "recipeId": 2295989,
+        "guid": "1d2c07c8-367d-4060-be45-3f25c89c59c5",
+        "recipe": "Root 666",
+        "status": "DRAFT",
+        "recipeGroups": "Cocktail",
+        "type": "Recipe",
+        "grossMargin": null,
+        "menuPrice": "13",
+        "primeCost": null,
+        "lastModified": "Sep 19, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": "500000056984926335",
+        "externalMenuItemGuid": "16f9fca1-8951-4ffd-a209-a2751c24d213",
+        "foodCostPercent": null
+      },
+      {
+        "rowNumber": 8,
+        "recipeId": 2295992,
+        "guid": "b8f08d12-5130-4f92-817e-2d43e532687e",
+        "recipe": "Root 666 Batch",
+        "status": "DRAFT",
+        "recipeGroups": "Cocktail Batch",
+        "type": "Prep Recipe",
+        "grossMargin": "0",
+        "menuPrice": null,
+        "primeCost": "7.570230130584596",
+        "lastModified": "Sep 19, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": null,
+        "externalMenuItemGuid": null,
+        "foodCostPercent": "0"
+      },
+      {
+        "rowNumber": 9,
+        "recipeId": 2295994,
+        "guid": "7410b32a-ec95-44f5-8ebe-a5504c2b5b86",
+        "recipe": "Agave Wine Infusion",
+        "status": "DRAFT",
+        "recipeGroups": "Syrups",
+        "type": "Prep Recipe",
+        "grossMargin": null,
+        "menuPrice": null,
+        "primeCost": null,
+        "lastModified": "Sep 19, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": null,
+        "externalMenuItemGuid": null,
+        "foodCostPercent": null
+      },
+      {
+        "rowNumber": 10,
+        "recipeId": 2307040,
+        "guid": "923d526b-7684-4b72-8773-059f7e911623",
+        "recipe": "Dark Chocolate Demerara Syrup",
+        "status": "DRAFT",
+        "recipeGroups": "Syrups",
+        "type": "Prep Recipe",
+        "grossMargin": "0",
+        "menuPrice": null,
+        "primeCost": "0.9485468750000001",
+        "lastModified": "Sep 19, 2025",
+        "lastModifiedBy": "Le, Thai",
+        "posId": null,
+        "externalMenuItemGuid": null,
+        "foodCostPercent": "0"
+      }
+    ],
+    "debugInfo": null
+  },
+  "exception": null
+}
+```
+
+## Recipe Details Fetch
+
+And when clicking on each recipe, this fetch happens:
+
+`https://ecs-api-prod.sa.toasttab.com/api.recipes-query/api/1.0/recipes-v2/2307050/tenants/39494/locations/12802/recipe-details?isReGenerate=false`
+
+```json
+{
+  "data": {
+    "id": 2307050,
+    "guid": "3eaf511b-7753-45dd-822a-a45a77866d1a",
+    "name": "Holy Mole",
+    "status": "Complete",
+    "lastModified": "2025-10-15T16:42:10.263",
+    "lastModifiedBy": "Thai Le",
+    "latestDataModelDate": "2025-10-15T16:42:10.263",
+    "parentNestedLevel": 1,
+    "parentPrepRecipes": [],
+    "stats": {
+      "grossMargin": 87.06834581346912,
+      "menuPrice": 13,
+      "foodCost": 1.6811150442490148,
+      "associatedRecipeCount": 0,
+      "foodCostPercent": 12.931654186530883,
+      "laborCostPercent": 0
+    },
+    "basicDetail": {
+      "type": "Recipe",
+      "recipeGroup": "Cocktail",
+      "externalMenuItemGuid": "5d22cc66-ed02-412b-a323-5ee0bc2ac89d",
+      "menuPrice": 0,
+      "sizes": null,
+      "batchSize": null,
+      "batchUomId": null,
+      "batchUomName": null,
+      "shelfLife": 0,
+      "shelfLifeUom": null,
+      "notes": "",
+      "servingSize": 1,
+      "servingSizeUom": ""
+    },
+    "ingredients": [
+      {
+        "id": 7910417,
+        "referenceId": "2388247",
+        "referenceGuid": "518e03a4-62f4-4605-aa1f-6ce5d7f84853",
+        "type": "Prep recipe",
+        "name": "Holy Mole Batch",
+        "quantity": 3,
+        "uomId": 9,
+        "uom": "fl oz",
+        "ingredientYield": 100,
+        "consumablePortion": 100,
+        "cost": 1.6811150442490148
+      }
+    ],
+    "procedure": {
+      "imageUrl": null,
+      "imageName": null,
+      "s3Reference": "",
+      "instructions": [
+        {
+          "type": "English",
+          "data": ""
+        },
+        {
+          "type": "Others",
+          "data": ""
+        }
+      ],
+      "prepTime": null,
+      "prepTimeUom": "mins",
+      "cookTime": null,
+      "cookTimeUom": "mins",
+      "allergens": [
+        {
+          "id": 2,
+          "name": "Sesame",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 3,
+          "name": "Fish",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 4,
+          "name": "Tree Nuts",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 5,
+          "name": "Gluten",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 6,
+          "name": "Eggs",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 7,
+          "name": "Milk",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 8,
+          "name": "Soy",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 9,
+          "name": "Shellfish",
+          "doesContain": false,
+          "mayContain": false
+        },
+        {
+          "id": 1,
+          "name": "Peanuts",
+          "doesContain": false,
+          "mayContain": false
+        }
+      ],
+      "tools": []
+    },
+    "labor": null,
+    "laborTotalCost": 0,
+    "sizes": null,
+    "debugInfo": null
+  },
+  "exception": null
+}
+```
+
+## Required Fields
+
+I only need these fields from the recipe:
+
+- Name
+- Recipe Type
+- Recipe Group
+- Pair with Toast Item
+- Price
+- Ingredients: Ingredient Name, Ingredient Type, Qty, UOM, Cost
+- Ingredients total cost

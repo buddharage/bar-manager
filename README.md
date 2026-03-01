@@ -4,7 +4,7 @@ AI-powered operations dashboard for a 50-seat cocktail bar in Brooklyn, NY. Inte
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router) + TypeScript
+- **Framework**: Next.js 16 (App Router) + TypeScript
 - **Database**: Supabase (PostgreSQL)
 - **UI**: Tailwind CSS + shadcn/ui
 - **AI**: Gemini 2.0 Flash (function calling for data queries, document search, reorder suggestions, PDF text extraction)
@@ -38,6 +38,9 @@ The app will not work until the database tables are created. Run each migration 
 
 1. `supabase/migrations/001_initial_schema.sql` — core tables (inventory, sales, sync logs, settings, etc.)
 2. `supabase/migrations/002_google_documents.sql` — Google Workspace document storage
+3. `supabase/migrations/003_vector_embeddings.sql` — Vector embeddings for document search
+4. `supabase/migrations/003_order_items_category_size.sql` — Order items category/size fields
+5. `supabase/migrations/004_recipes.sql` — xtraCHEF recipes, recipe ingredients, and raw ingredients
 
 For each file: copy the full contents, paste into the SQL Editor, and click **Run**. You must run them in order because later migrations may depend on earlier ones.
 
@@ -126,11 +129,36 @@ You can also trigger all syncs manually from the GitHub Actions tab or from the 
 
 After the first Toast sync populates your inventory, set `par_level` for items you want to track. Do this in Supabase's table editor on the `inventory_items` table. Once set, the daily sync will automatically generate low-stock alerts and the AI can suggest reorder quantities.
 
+### 8. Sync xtraCHEF recipes (optional)
+
+Imports recipes, prep recipes, and ingredients from xtraCHEF (Toast's recipe management tool). This uses xtraCHEF's internal API — there's no public API, so you need a Bearer token from a logged-in browser session.
+
+1. Add your tenant and location IDs to `.env.local` (see `.env.local.example` for instructions on finding them in DevTools):
+   ```
+   XTRACHEF_TENANT_ID=39494
+   XTRACHEF_LOCATION_ID=12802
+   ```
+2. Get your Bearer token:
+   - Log into [app.sa.toasttab.com](https://app.sa.toasttab.com)
+   - Open DevTools (F12) → Network tab
+   - Navigate to Recipes
+   - Find a request to `ecs-api-prod.sa.toasttab.com`
+   - Copy the `Authorization` header value (starts with `Bearer`)
+3. Paste the token either:
+   - In `.env.local` as `XTRACHEF_TOKEN` (for CLI sync), or
+   - In the **Settings** page under "xtraCHEF Recipes → Bearer token" (for UI sync)
+4. Sync via the Settings page "Sync Recipes" button, or from the CLI:
+   ```bash
+   npm run sync:xtrachef
+   ```
+
+> **Note:** The Bearer token expires when your Toast session ends. Re-paste it whenever sync returns a 401 error.
+
 ## Phases
 
 | Phase | Status | Scope |
 |-------|--------|-------|
-| **1 — Inventory + Toast** | Done | Dashboard, inventory tracking, low-stock alerts, AI reorder suggestions, daily sync |
+| **1 — Inventory + Toast** | Done | Dashboard, inventory tracking, low-stock alerts, AI reorder suggestions, daily sync, xtraCHEF recipe sync |
 | **2 — QBO + Sales Tax** | Stubbed | QuickBooks journal entries, NYC ST-100 tax worksheet, monthly filing reminders |
 | **3 — Sling + Payroll** | Stubbed | AI scheduling, time entry tracking, payroll pre-fill |
 | **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling |
@@ -144,8 +172,9 @@ app/
   dashboard/              Sales KPIs + active alerts overview
   inventory/              Inventory list with stock status
   inventory/alerts/       Low-stock alerts + AI reorder suggestions
+  recipes/                Recipes + prep recipes from xtraCHEF
   chat/                   Conversational AI interface
-  settings/               Integration status, Google connect, sync history
+  settings/               Integration status, Google connect, xtraCHEF token, sync history
   tax/                    Sales tax worksheet (Phase 2)
   bookkeeping/            QBO journal entries (Phase 2)
   schedule/               AI scheduling (Phase 3)
@@ -156,16 +185,21 @@ app/
     sync/toast/           Daily Toast sync endpoint
     sync/google/          Google Drive sync endpoint
     sync/gmail/           Gmail sync endpoint
+    sync/xtrachef/        xtraCHEF recipe sync endpoint
     webhooks/toast/       Real-time Toast stock webhook
     ai/chat/              Gemini chat endpoint
     ai/reorder/           AI reorder suggestions endpoint
 
 lib/
   auth/                   Session token (HMAC-SHA256) + request verification
-  integrations/           Toast, Google, QBO, Sling API clients
+  integrations/           Toast, Google, xtraCHEF, QBO, Sling API clients
+  sync/                   Shared sync logic (xtraCHEF recipes)
   ai/                     Gemini Flash agent with tool-calling
   tax/                    NYC sales tax calculator
   supabase/               DB clients and TypeScript types
+
+scripts/
+  sync-xtrachef.ts        CLI script for xtraCHEF recipe sync
 
 supabase/
   migrations/             SQL schema migrations (run in order)

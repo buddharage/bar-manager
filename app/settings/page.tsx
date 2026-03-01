@@ -18,6 +18,13 @@ interface SyncLogEntry {
   completed_at: string | null;
 }
 
+interface XtrachefStatus {
+  lastSync: SyncLogEntry | null;
+  recipeCount: number;
+  ingredientCount: number;
+  hasToken: boolean;
+}
+
 function SettingsContent() {
   const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [syncing, setSyncing] = useState(false);
@@ -25,6 +32,10 @@ function SettingsContent() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const [xtrachefStatus, setXtrachefStatus] = useState<XtrachefStatus | null>(null);
+  const [xtrachefToken, setXtrachefToken] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
+  const [syncingXtrachef, setSyncingXtrachef] = useState(false);
   const searchParams = useSearchParams();
   const supabaseRef = useRef(createClient());
 
@@ -40,6 +51,7 @@ function SettingsContent() {
   useEffect(() => {
     loadSyncLogs();
     checkGoogleConnection();
+    loadXtrachefStatus();
   }, [loadSyncLogs]);
 
   // Poll sync logs every 3s while a sync is in progress
@@ -128,6 +140,56 @@ function SettingsContent() {
     if (!window.confirm("Disconnect Google account? Synced documents will be preserved.")) return;
     await fetch("/api/auth/google/status", { method: "DELETE" });
     setGoogleConnected(false);
+  }
+
+  async function loadXtrachefStatus() {
+    try {
+      const res = await fetch("/api/sync/xtrachef");
+      if (res.ok) {
+        const data = await res.json();
+        setXtrachefStatus(data);
+      }
+    } catch {
+      // Table may not exist yet
+    }
+  }
+
+  async function saveXtrachefToken() {
+    if (!xtrachefToken.trim()) return;
+    setSavingToken(true);
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("settings")
+        .upsert({ key: "xtrachef_token", value: xtrachefToken.trim() }, { onConflict: "key" });
+      setXtrachefToken("");
+      loadXtrachefStatus();
+      alert("Bearer token saved.");
+    } catch (err) {
+      alert(`Failed to save token: ${err}`);
+    }
+    setSavingToken(false);
+  }
+
+  async function triggerXtrachefSync() {
+    setSyncingXtrachef(true);
+    try {
+      const res = await fetch("/api/sync/xtrachef", { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        alert(`xtraCHEF sync failed: ${data.error}`);
+      } else {
+        const parts = [`${data.recipes_synced} recipes`];
+        if (data.ingredient_lines > 0) parts.push(`${data.ingredient_lines} ingredient lines`);
+        if (data.raw_ingredients > 0) parts.push(`${data.raw_ingredients} raw ingredients`);
+        alert(`xtraCHEF sync complete: ${parts.join(", ")}`);
+      }
+      loadSyncLogs();
+      loadXtrachefStatus();
+    } catch (err) {
+      alert(`xtraCHEF sync error: ${err}`);
+    }
+    setSyncingXtrachef(false);
   }
 
   return (
@@ -221,6 +283,98 @@ function SettingsContent() {
               <a href="/api/auth/google">Connect Google</a>
             </Button>
           )}
+        </CardContent>
+      </Card>
+
+      {/* xtraCHEF Recipes */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>xtraCHEF Recipes</CardTitle>
+            <div className="flex items-center gap-2">
+              {xtrachefStatus?.hasToken ? (
+                <Badge variant="default">Token saved</Badge>
+              ) : (
+                <Badge variant="secondary">No token</Badge>
+              )}
+              <Button
+                onClick={triggerXtrachefSync}
+                disabled={syncingXtrachef || !xtrachefStatus?.hasToken}
+              >
+                {syncingXtrachef ? "Syncing..." : "Sync Recipes"}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Sync recipes, prep recipes, and ingredients from xtraCHEF.
+            Calls the internal xtraCHEF API using your Bearer token.
+          </p>
+
+          {xtrachefStatus && (
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <div className="text-muted-foreground">Recipes</div>
+                <div className="text-lg font-semibold">{xtrachefStatus.recipeCount}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Ingredients</div>
+                <div className="text-lg font-semibold">{xtrachefStatus.ingredientCount}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Last sync</div>
+                <div className="text-lg font-semibold">
+                  {xtrachefStatus.lastSync?.completed_at
+                    ? new Date(xtrachefStatus.lastSync.completed_at).toLocaleDateString()
+                    : "Never"}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium" htmlFor="xc-token">
+                Bearer token
+              </label>
+              <div className="rounded border bg-muted/50 p-3 text-xs text-muted-foreground mb-2 space-y-1">
+                <p className="font-medium text-foreground text-sm">How to get your token:</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Log into <a href="https://app.sa.toasttab.com" target="_blank" rel="noopener noreferrer" className="underline">app.sa.toasttab.com</a></li>
+                  <li>Open DevTools (<kbd className="rounded bg-muted px-1 py-0.5">F12</kbd> or <kbd className="rounded bg-muted px-1 py-0.5">Cmd+Opt+I</kbd>)</li>
+                  <li>Go to the <strong>Network</strong> tab</li>
+                  <li>Navigate to Recipes in xtraCHEF</li>
+                  <li>In Network, find any request to <code className="rounded bg-muted px-1">ecs-api-prod.sa.toasttab.com</code></li>
+                  <li>Click the request, scroll to <strong>Request Headers</strong></li>
+                  <li>Copy the <code className="rounded bg-muted px-1">Authorization</code> header value (starts with <code className="rounded bg-muted px-1">Bearer</code>) and paste it below</li>
+                </ol>
+                <p className="pt-1">
+                  The token expires when your Toast session ends.
+                  Re-paste it here whenever sync returns a 401 error.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  id="xc-token"
+                  type="password"
+                  className="flex-1 rounded border bg-background px-3 py-1.5 text-sm"
+                  placeholder="Paste Bearer token value..."
+                  value={xtrachefToken}
+                  onChange={(e) => setXtrachefToken(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  onClick={saveXtrachefToken}
+                  disabled={savingToken || !xtrachefToken.trim()}
+                >
+                  {savingToken ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
