@@ -12,6 +12,7 @@ const navItems = [
   { href: "/inventory", label: "Inventory", icon: "Package" },
   { href: "/inventory/alerts", label: "Alerts", icon: "Bell" },
   { href: "/tax", label: "Sales Tax", icon: "Calculator" },
+  { href: "/gift-cards", label: "Gift Cards", icon: "CreditCard" },
   { href: "/bookkeeping", label: "Bookkeeping", icon: "BookOpen" },
   { href: "/schedule", label: "Schedule", icon: "Calendar" },
   { href: "/payroll", label: "Payroll", icon: "DollarSign" },
@@ -38,6 +39,9 @@ const icons: Record<string, React.ReactNode> = {
   ),
   Calculator: (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
+  ),
+  CreditCard: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
   ),
   BookOpen: (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>

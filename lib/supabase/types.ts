@@ -142,6 +142,21 @@ export interface Document {
   updated_at: string;
 }
 
+export interface GiftCard {
+  id: number;
+  card_id: string;
+  beginning_balance: number;
+  current_balance: number;
+  status: "active" | "depleted" | "expired" | "voided";
+  issued_date: string | null;
+  last_used_date: string | null;
+  purchaser_name: string | null;
+  recipient_name: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database table name to type mapping
 export interface Database {
   inventory_items: InventoryItem;
@@ -156,4 +171,5 @@ export interface Database {
   sync_logs: SyncLog;
   settings: Setting;
   documents: Document;
+  gift_cards: GiftCard;
 }
