@@ -112,6 +112,61 @@ export interface Document {
   updated_at: string;
 }
 
+export interface Ingredient {
+  id: number;
+  name: string;
+  category: string | null;
+  unit: string;
+  cost_per_unit: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrepRecipe {
+  id: number;
+  name: string;
+  instructions: string | null;
+  yield_amount: number | null;
+  yield_unit: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrepRecipeComponent {
+  id: number;
+  prep_recipe_id: number;
+  ingredient_id: number | null;
+  prep_recipe_ref_id: number | null;
+  quantity: number;
+  unit: string | null;
+  created_at: string;
+  // Joined fields
+  ingredients?: Pick<Ingredient, "name" | "unit">;
+  prep_recipes?: Pick<PrepRecipe, "name">;
+}
+
+export interface Recipe {
+  id: number;
+  name: string;
+  menu_item_name: string | null;
+  instructions: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecipeComponent {
+  id: number;
+  recipe_id: number;
+  ingredient_id: number | null;
+  prep_recipe_id: number | null;
+  quantity: number;
+  unit: string | null;
+  created_at: string;
+  // Joined fields
+  ingredients?: Pick<Ingredient, "name" | "unit">;
+  prep_recipes?: Pick<PrepRecipe, "name">;
+}
+
 // Database table name to type mapping
 export interface Database {
   inventory_items: InventoryItem;
@@ -124,4 +179,9 @@ export interface Database {
   sync_logs: SyncLog;
   settings: Setting;
   documents: Document;
+  ingredients: Ingredient;
+  prep_recipes: PrepRecipe;
+  prep_recipe_components: PrepRecipeComponent;
+  recipes: Recipe;
+  recipe_components: RecipeComponent;
 }
