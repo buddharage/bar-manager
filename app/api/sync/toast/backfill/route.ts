@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { verifyRequest } from "@/lib/auth/session";
 import { fetchAllMenuLookups } from "@/lib/integrations/toast-client";
 import { syncOrdersForDate } from "@/lib/sync/toast-orders";
+import { recalculateExpectedInventory } from "@/lib/inventory/expected";
 
 // Maximum number of days to backfill in a single request to avoid timeouts
 const MAX_DAYS = 90;
@@ -118,11 +119,15 @@ export async function POST(request: NextRequest) {
         .eq("id", syncLog.id);
     }
 
+    // Recalculate expected inventory after backfill
+    const expectedResult = await recalculateExpectedInventory(supabase);
+
     return NextResponse.json({
       success: true,
       days_processed: results.length,
       total_records: totalRecords,
       total_orders: totalOrders,
+      expected_inventory_updated: expectedResult.updated,
       results,
     });
   } catch (error) {

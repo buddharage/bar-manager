@@ -1,6 +1,12 @@
-import { createServerClient } from "@/lib/supabase/server";
+"use client";
+
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -9,131 +15,806 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import type { Ingredient } from "@/lib/supabase/types";
+import { baseToPurchase, COMMON_UNITS, COMMON_PURCHASE_UNITS } from "@/lib/units";
 
-export const dynamic = "force-dynamic";
+type IngredientWithAlerts = Ingredient & { active_alerts: number };
 
-function stockStatus(current: number, par: number | null) {
-  if (current === 0) return { label: "Out of Stock", variant: "destructive" as const };
-  if (par && current <= par) return { label: "Low", variant: "default" as const };
-  return { label: "OK", variant: "secondary" as const };
+interface Summary {
+  total: number;
+  counted: number;
+  belowPar: number;
+  categories: number;
 }
 
-export default async function InventoryPage() {
-  const supabase = createServerClient();
+// ---------------------------------------------------------------------------
+// Dialogs
+// ---------------------------------------------------------------------------
 
-  const { data: items, error } = await supabase
-    .from("inventory_items")
-    .select("*")
-    .order("category", { ascending: true })
-    .order("name", { ascending: true });
+function CountDialog({
+  ingredient,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  ingredient: IngredientWithAlerts | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [input, setInput] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (error) {
+  useEffect(() => {
+    if (open) {
+      setInput("");
+      setNote("");
+      setError(null);
+    }
+  }, [open]);
+
+  async function handleSave() {
+    if (!ingredient || !input.trim()) return;
+    setSaving(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/inventory/${ingredient.id}/count`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity_raw: input.trim(), note: note.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to save count");
+      } else {
+        onSaved();
+        onOpenChange(false);
+      }
+    } catch {
+      setError("Network error");
+    }
+    setSaving(false);
+  }
+
+  if (!ingredient) return null;
+
+  const hasConversion = ingredient.purchase_unit && ingredient.purchase_unit_quantity;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Count: {ingredient.name}</DialogTitle>
+          <DialogDescription>
+            Enter the current quantity on hand.
+            {hasConversion && (
+              <>
+                {" "}You can enter in {ingredient.purchase_unit}s (1 {ingredient.purchase_unit} = {ingredient.purchase_unit_quantity} {ingredient.unit}).
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="count-input">Quantity</Label>
+            <Input
+              id="count-input"
+              placeholder={
+                hasConversion
+                  ? `e.g. "2 ${ingredient.purchase_unit}s" or "500 ${ingredient.unit}"`
+                  : `e.g. "10" (in ${ingredient.unit || "units"})`
+              }
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="count-note">Note (optional)</Label>
+            <Input
+              id="count-note"
+              placeholder="e.g. After delivery, Weekly count"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          {ingredient.last_counted_at && (
+            <p className="text-xs text-muted-foreground">
+              Last counted: {new Date(ingredient.last_counted_at).toLocaleString()}
+              {" "}({formatQty(ingredient.last_counted_quantity, ingredient)})
+            </p>
+          )}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving || !input.trim()}>
+            {saving ? "Saving..." : "Save Count"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SettingsDialog({
+  ingredient,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  ingredient: IngredientWithAlerts | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [parLevel, setParLevel] = useState("");
+  const [unit, setUnit] = useState("");
+  const [purchaseUnit, setPurchaseUnit] = useState("");
+  const [purchaseUnitQty, setPurchaseUnitQty] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && ingredient) {
+      setParLevel(ingredient.par_level?.toString() || "");
+      setUnit(ingredient.unit || "");
+      setPurchaseUnit(ingredient.purchase_unit || "");
+      setPurchaseUnitQty(ingredient.purchase_unit_quantity?.toString() || "");
+      setError(null);
+    }
+  }, [open, ingredient]);
+
+  async function handleSave() {
+    if (!ingredient) return;
+    setSaving(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/inventory/${ingredient.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          par_level: parLevel || null,
+          unit: unit || null,
+          purchase_unit: purchaseUnit || null,
+          purchase_unit_quantity: purchaseUnitQty || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to save");
+      } else {
+        onSaved();
+        onOpenChange(false);
+      }
+    } catch {
+      setError("Network error");
+    }
+    setSaving(false);
+  }
+
+  if (!ingredient) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Settings: {ingredient.name}</DialogTitle>
+          <DialogDescription>
+            Configure par level, base unit, and purchase unit conversion.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="base-unit">Base Unit</Label>
+              <select
+                id="base-unit"
+                className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+              >
+                <option value="">Select...</option>
+                {COMMON_UNITS.map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="par-level">Par Level ({unit || "units"})</Label>
+              <Input
+                id="par-level"
+                type="number"
+                step="any"
+                placeholder="e.g. 500"
+                value={parLevel}
+                onChange={(e) => setParLevel(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium mb-2">Purchase Unit Conversion</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Define how the unit you buy converts to the base unit.
+              For example: 1 bottle = 750 ml.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="purchase-unit">Purchase Unit</Label>
+                <select
+                  id="purchase-unit"
+                  className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                  value={purchaseUnit}
+                  onChange={(e) => setPurchaseUnit(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {COMMON_PURCHASE_UNITS.map((pu) => (
+                    <option key={pu} value={pu}>
+                      {pu}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="purchase-qty">
+                  1 {purchaseUnit || "unit"} = ? {unit || "base units"}
+                </Label>
+                <Input
+                  id="purchase-qty"
+                  type="number"
+                  step="any"
+                  placeholder="e.g. 750"
+                  value={purchaseUnitQty}
+                  onChange={(e) => setPurchaseUnitQty(e.target.value)}
+                  disabled={!purchaseUnit}
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Settings"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HistoryDialog({
+  ingredient,
+  open,
+  onOpenChange,
+}: {
+  ingredient: IngredientWithAlerts | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [counts, setCounts] = useState<
+    { id: number; quantity: number; quantity_raw: string | null; note: string | null; counted_at: string }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open && ingredient) {
+      setLoading(true);
+      fetch(`/api/inventory/${ingredient.id}/count`)
+        .then((r) => r.json())
+        .then((data) => setCounts(data.counts || []))
+        .finally(() => setLoading(false));
+    }
+  }, [open, ingredient]);
+
+  if (!ingredient) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Count History: {ingredient.name}</DialogTitle>
+          <DialogDescription>
+            All manual inventory counts for this ingredient.
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground py-4">Loading...</p>
+        ) : counts.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">No counts recorded yet.</p>
+        ) : (
+          <div className="max-h-80 overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Entered</TableHead>
+                  <TableHead className="text-right">Qty ({ingredient.unit})</TableHead>
+                  <TableHead>Note</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {counts.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="text-sm">
+                      {new Date(c.counted_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.quantity_raw || "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm">
+                      {c.quantity}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.note || "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <DialogFooter showCloseButton />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatQty(qty: number, ing: Ingredient): string {
+  if (ing.purchase_unit && ing.purchase_unit_quantity && ing.purchase_unit_quantity > 0) {
+    const inPurchase = baseToPurchase(qty, ing.purchase_unit_quantity);
+    const rounded = Math.round(inPurchase * 100) / 100;
+    return `${rounded} ${ing.purchase_unit}${rounded !== 1 ? "s" : ""} (${qty} ${ing.unit || "units"})`;
+  }
+  return `${qty} ${ing.unit || "units"}`;
+}
+
+function statusForIngredient(ing: IngredientWithAlerts): {
+  label: string;
+  variant: "destructive" | "default" | "secondary";
+} {
+  if (ing.expected_quantity != null && ing.expected_quantity === 0) {
+    return { label: "Depleted", variant: "destructive" };
+  }
+  if (
+    ing.par_level != null &&
+    ing.expected_quantity != null &&
+    ing.expected_quantity <= ing.par_level
+  ) {
+    return { label: "Below Par", variant: "destructive" };
+  }
+  if (!ing.last_counted_at) {
+    return { label: "Not Counted", variant: "secondary" };
+  }
+  return { label: "OK", variant: "secondary" };
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
+
+type SortField = "name" | "expected_quantity" | "par_level" | "status";
+type SortDir = "asc" | "desc";
+
+export default function InventoryPage() {
+  const [items, setItems] = useState<IngredientWithAlerts[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [groupByCategory, setGroupByCategory] = useState(false);
+
+  // Dialog state
+  const [countDialogItem, setCountDialogItem] = useState<IngredientWithAlerts | null>(null);
+  const [settingsDialogItem, setSettingsDialogItem] = useState<IngredientWithAlerts | null>(null);
+  const [historyDialogItem, setHistoryDialogItem] = useState<IngredientWithAlerts | null>(null);
+
+  const fetchInventory = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/inventory");
+      if (!res.ok) throw new Error("Failed to load inventory");
+      const data = await res.json();
+      setItems(data.items);
+      setSummary(data.summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error loading inventory");
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchInventory();
+  }, [fetchInventory]);
+
+  async function handleRecalculate() {
+    setRecalculating(true);
+    try {
+      await fetch("/api/inventory", { method: "POST" });
+      await fetchInventory();
+    } catch {
+      // ignore
+    }
+    setRecalculating(false);
+  }
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(field === "name" ? "asc" : "desc");
+    }
+  };
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return items;
+    const q = search.toLowerCase();
+    return items.filter(
+      (i) =>
+        i.name.toLowerCase().includes(q) ||
+        (i.category && i.category.toLowerCase().includes(q)),
+    );
+  }, [items, search]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "name":
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case "expected_quantity":
+          cmp = (a.expected_quantity ?? -1) - (b.expected_quantity ?? -1);
+          break;
+        case "par_level":
+          cmp = (a.par_level ?? -1) - (b.par_level ?? -1);
+          break;
+        case "status": {
+          const sa = statusForIngredient(a);
+          const sb = statusForIngredient(b);
+          const order = { Depleted: 0, "Below Par": 1, "Not Counted": 2, OK: 3 };
+          cmp = (order[sa.label as keyof typeof order] ?? 4) - (order[sb.label as keyof typeof order] ?? 4);
+          break;
+        }
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filtered, sortField, sortDir]);
+
+  const groups = useMemo(() => {
+    if (!groupByCategory) return null;
+    const map = new Map<string, IngredientWithAlerts[]>();
+    for (const item of sorted) {
+      const key = item.category || "Uncategorized";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [sorted, groupByCategory]);
+
+  function SortBtn({
+    field,
+    children,
+  }: {
+    field: SortField;
+    children: React.ReactNode;
+  }) {
     return (
-      <div className="p-6">
-        <p className="text-destructive">Failed to load inventory: {error.message}</p>
-      </div>
+      <button
+        type="button"
+        className="inline-flex items-center hover:text-foreground transition-colors"
+        onClick={() => handleSort(field)}
+      >
+        {children}
+        <span className="ml-1">
+          {sortField === field ? (sortDir === "asc" ? "\u2191" : "\u2193") : "\u2195"}
+        </span>
+      </button>
     );
   }
 
-  const categories = [...new Set((items || []).map((i) => i.category || "Uncategorized"))];
-  const lowStockCount = (items || []).filter(
-    (i) => i.par_level && i.current_stock <= i.par_level
-  ).length;
+  function renderRow(item: IngredientWithAlerts) {
+    const status = statusForIngredient(item);
+    const isBelowPar =
+      item.par_level != null &&
+      item.expected_quantity != null &&
+      item.expected_quantity <= item.par_level;
+
+    return (
+      <TableRow
+        key={item.id}
+        className={isBelowPar ? "bg-destructive/5" : undefined}
+      >
+        <TableCell className="font-medium">{item.name}</TableCell>
+        <TableCell className="text-muted-foreground text-sm">
+          {item.category || "—"}
+        </TableCell>
+        <TableCell className="text-right">
+          {item.last_counted_at ? (
+            <span title={`Counted: ${new Date(item.last_counted_at).toLocaleString()}`}>
+              {item.current_quantity} {item.unit || ""}
+              {item.purchase_unit && item.purchase_unit_quantity ? (
+                <span className="text-xs text-muted-foreground ml-1">
+                  ({Math.round(baseToPurchase(item.current_quantity, item.purchase_unit_quantity) * 100) / 100} {item.purchase_unit}s)
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell
+          className={`text-right font-medium ${isBelowPar ? "text-destructive" : ""}`}
+        >
+          {item.expected_quantity != null ? (
+            <span>
+              {item.expected_quantity} {item.unit || ""}
+              {item.purchase_unit && item.purchase_unit_quantity ? (
+                <span className="text-xs text-muted-foreground ml-1">
+                  ({Math.round(baseToPurchase(item.expected_quantity, item.purchase_unit_quantity) * 100) / 100} {item.purchase_unit}s)
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell className="text-right">
+          {item.par_level != null ? (
+            <span>
+              {item.par_level} {item.unit || ""}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell>
+          <Badge variant={status.variant}>{status.label}</Badge>
+        </TableCell>
+        <TableCell className="text-right text-sm text-muted-foreground">
+          {item.last_counted_at
+            ? new Date(item.last_counted_at).toLocaleDateString()
+            : "Never"}
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCountDialogItem(item)}
+            >
+              Count
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSettingsDialogItem(item)}
+              title="Settings"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setHistoryDialogItem(item)}
+              title="Count history"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Inventory</h1>
         <div className="flex gap-2">
-          <Badge variant="secondary">{items?.length || 0} items</Badge>
-          {lowStockCount > 0 && (
-            <Badge variant="destructive">{lowStockCount} low stock</Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRecalculate}
+            disabled={recalculating}
+          >
+            {recalculating ? "Recalculating..." : "Recalculate Expected"}
+          </Button>
+          {summary && (
+            <div className="flex gap-2">
+              <Badge variant="secondary">{summary.total} ingredients</Badge>
+              <Badge variant="secondary">{summary.counted} counted</Badge>
+              {summary.belowPar > 0 && (
+                <Badge variant="destructive">{summary.belowPar} below par</Badge>
+              )}
+            </div>
           )}
         </div>
       </div>
 
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
       {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Items
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{items?.length || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Categories
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{categories.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Below Par Level
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{lowStockCount}</div>
-          </CardContent>
-        </Card>
+      {summary && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Ingredients
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{summary.total}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Counted
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{summary.counted}</div>
+              <p className="text-xs text-muted-foreground">
+                {summary.total - summary.counted} not yet counted
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Below Par Level
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${summary.belowPar > 0 ? "text-destructive" : ""}`}>
+                {summary.belowPar}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Categories
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{summary.categories}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          className="max-w-xs"
+          placeholder="Search ingredients..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Button
+          variant={groupByCategory ? "default" : "outline"}
+          size="sm"
+          onClick={() => setGroupByCategory((g) => !g)}
+        >
+          Group by Category
+        </Button>
       </div>
 
       {/* Inventory table */}
       <Card>
         <CardContent className="pt-6">
-          {!items || items.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No inventory items yet. Run a Toast sync to populate inventory data.
+          {loading ? (
+            <p className="py-8 text-center text-muted-foreground">Loading inventory...</p>
+          ) : sorted.length === 0 ? (
+            <p className="py-8 text-center text-muted-foreground">
+              {items.length === 0
+                ? "No ingredients found. Sync recipes from xtraCHEF in Settings to populate ingredients."
+                : "No ingredients match your search."}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead>
+                    <SortBtn field="name">Name</SortBtn>
+                  </TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Stock</TableHead>
-                  <TableHead className="text-right">Par Level</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Last Synced</TableHead>
+                  <TableHead className="text-right">Last Count</TableHead>
+                  <TableHead className="text-right">
+                    <SortBtn field="expected_quantity">Expected Inventory</SortBtn>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortBtn field="par_level">Par Level</SortBtn>
+                  </TableHead>
+                  <TableHead>
+                    <SortBtn field="status">Status</SortBtn>
+                  </TableHead>
+                  <TableHead className="text-right">Counted At</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item) => {
-                  const status = stockStatus(item.current_stock, item.par_level);
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{item.category || "—"}</TableCell>
-                      <TableCell className="text-right">{item.current_stock}</TableCell>
-                      <TableCell className="text-right">
-                        {item.par_level ?? "—"}
-                      </TableCell>
-                      <TableCell>{item.unit}</TableCell>
-                      <TableCell>
-                        <Badge variant={status.variant}>{status.label}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground text-sm">
-                        {item.last_synced_at
-                          ? new Date(item.last_synced_at).toLocaleDateString()
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {groups
+                  ? groups.map(([category, groupItems]) => (
+                      <Fragment key={category}>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableCell colSpan={8} className="font-semibold">
+                            {category}
+                            <span className="ml-2 text-muted-foreground font-normal text-sm">
+                              ({groupItems.length} ingredient{groupItems.length !== 1 ? "s" : ""})
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                        {groupItems.map(renderRow)}
+                      </Fragment>
+                    ))
+                  : sorted.map(renderRow)}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
+
+      {/* Dialogs */}
+      <CountDialog
+        ingredient={countDialogItem}
+        open={!!countDialogItem}
+        onOpenChange={(open) => !open && setCountDialogItem(null)}
+        onSaved={fetchInventory}
+      />
+      <SettingsDialog
+        ingredient={settingsDialogItem}
+        open={!!settingsDialogItem}
+        onOpenChange={(open) => !open && setSettingsDialogItem(null)}
+        onSaved={fetchInventory}
+      />
+      <HistoryDialog
+        ingredient={historyDialogItem}
+        open={!!historyDialogItem}
+        onOpenChange={(open) => !open && setHistoryDialogItem(null)}
+      />
     </div>
   );
 }
