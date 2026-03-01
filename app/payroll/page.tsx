@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "lucide-react";
 
 export default function PayrollPage() {
   return (
@@ -13,7 +14,7 @@ export default function PayrollPage() {
             rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            Open in Toast Payroll &darr;
+            Open in Toast Payroll <ExternalLink className="inline h-3 w-3" />
           </a>
         </div>
         <Badge variant="secondary">Phase 3</Badge>

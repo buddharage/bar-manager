@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "lucide-react";
 
 export default function SchedulePage() {
   return (
@@ -13,7 +14,7 @@ export default function SchedulePage() {
             rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            Open in Sling &darr;
+            Open in Sling <ExternalLink className="inline h-3 w-3" />
           </a>
         </div>
         <Badge variant="secondary">Phase 3</Badge>

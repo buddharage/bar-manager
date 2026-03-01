@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -198,7 +199,7 @@ export default function MenuSalesPage() {
           rel="noopener noreferrer"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Open in Toast &darr;
+          Open in Toast <ExternalLink className="inline h-3 w-3" />
         </a>
       </div>
 

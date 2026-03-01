@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "lucide-react";
 import { RecipeList } from "@/components/recipe-list";
 
 export const dynamic = "force-dynamic";
@@ -78,7 +79,7 @@ export default async function RecipesPage() {
             rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            Open in xtraCHEF &darr;
+            Open in xtraCHEF <ExternalLink className="inline h-3 w-3" />
           </a>
         </div>
         <div className="flex gap-2">
