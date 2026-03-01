@@ -1,4 +1,4 @@
-// Document chunking + Gemini vector embeddings + similarity search
+// Document chunking + vector embeddings + similarity search
 // Used by the Drive sync pipeline (chunk & embed) and the chat agent (retrieve)
 
 import { GoogleGenerativeAI, type EmbedContentRequest } from "@google/generative-ai";
@@ -84,7 +84,7 @@ export function chunkDocument(title: string, content: string): DocumentChunk[] {
 }
 
 // ============================================================
-// Embedding — convert text into vectors via Gemini
+// Embedding — convert text into vectors via Anthropic
 // ============================================================
 
 /**
@@ -114,7 +114,7 @@ export async function embedText(
 
 /**
  * Embed multiple texts in a single batch request.
- * Gemini supports up to 100 texts per batch.
+ * Supports up to 100 texts per batch.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];

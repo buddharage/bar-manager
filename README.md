@@ -7,7 +7,7 @@ AI-powered operations dashboard for a 50-seat cocktail bar in Brooklyn, NY. Inte
 - **Framework**: Next.js 15 (App Router) + TypeScript
 - **Database**: Supabase (PostgreSQL)
 - **UI**: Tailwind CSS + shadcn/ui
-- **AI**: Gemini 2.0 Flash (function calling for data queries, document search, reorder suggestions, PDF text extraction)
+- **AI**: Anthropic Claude (function calling for data queries, document search, reorder suggestions, PDF text extraction)
 - **Cron**: GitHub Actions → Vercel API routes
 - **Deployment**: Vercel
 
@@ -70,12 +70,12 @@ The webhook endpoint at `/api/webhooks/toast` receives `STOCK_UPDATE` events and
 
 See the [Toast webhook guide](https://doc.toasttab.com/doc/devguide/apiStockWebhook.html) for details on stock event types and payload formats.
 
-### 3. Configure Gemini AI
+### 3. Configure Anthropic AI
 
-1. Get an API key at [Google AI Studio](https://aistudio.google.com/apikey)
+1. Get an API key at [console.anthropic.com](https://console.anthropic.com/)
 2. Add to `.env.local`:
    ```
-   GEMINI_API_KEY=your-gemini-api-key
+   ANTHROPIC_API_KEY=your-anthropic-api-key
    ```
 
 ### 4. Connect Google Workspace (optional)
@@ -133,8 +133,24 @@ After the first Toast sync populates your inventory, set `par_level` for items y
 | **1 — Inventory + Toast** | Done | Dashboard, inventory tracking, low-stock alerts, AI reorder suggestions, daily sync |
 | **2 — QBO + Sales Tax** | Stubbed | QuickBooks journal entries, NYC ST-100 tax worksheet, monthly filing reminders |
 | **3 — Sling + Payroll** | Stubbed | AI scheduling, time entry tracking, payroll pre-fill |
-| **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling |
+| **4 — AI Chat** | Done | Natural language queries against bar data via Anthropic Claude function calling |
 | **Google Workspace** | Done | Drive + Gmail sync, full-text document search, AI-powered PDF extraction |
+
+## AI Caching
+
+The AI layer uses a custom in-memory LRU cache (`lib/ai/token-cache.ts`) with TTL support to reduce API costs and latency. There are three cache tiers:
+
+| Cache | Max Size | TTL | Purpose |
+|-------|----------|-----|---------|
+| **Embedding** | 200 entries | 30 min | Avoids re-embedding identical text. Cache keys are normalized (trimmed, lowercased, whitespace-collapsed) so trivially different inputs hit the same entry. |
+| **RAG Context** | 50 entries | 5 min | Caches vector similarity search results. Keyed on `query + limit + threshold`. Short TTL ensures recently synced documents are picked up. |
+| **Tool Result** | 100 entries | 60 sec | Caches database query results from AI tool calls (`query_inventory`, `query_sales`, `query_top_sellers`, `query_alerts`, `search_documents`). `search_gmail` is explicitly excluded because it must always return live data. |
+
+All three caches use LRU eviction — when a cache is full, the least-recently-used entry is dropped. Entries are also automatically discarded when their TTL expires.
+
+Cache performance is tracked per-request via `TokenUsage` and returned from the `/api/ai/chat` endpoint, including counts of embedding cache hits/misses, tool cache hits/misses, and whether the RAG result came from cache.
+
+Utility functions `getCacheStats()` and `clearAllCaches()` are available for monitoring and debugging.
 
 ## Project Structure
 
@@ -157,13 +173,13 @@ app/
     sync/google/          Google Drive sync endpoint
     sync/gmail/           Gmail sync endpoint
     webhooks/toast/       Real-time Toast stock webhook
-    ai/chat/              Gemini chat endpoint
+    ai/chat/              AI chat endpoint
     ai/reorder/           AI reorder suggestions endpoint
 
 lib/
   auth/                   Session token (HMAC-SHA256) + request verification
   integrations/           Toast, Google, QBO, Sling API clients
-  ai/                     Gemini Flash agent with tool-calling
+  ai/                     Anthropic Claude agent with tool-calling and multi-layer caching
   tax/                    NYC sales tax calculator
   supabase/               DB clients and TypeScript types
 

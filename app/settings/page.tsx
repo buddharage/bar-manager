@@ -152,7 +152,7 @@ function SettingsContent() {
           <Separator />
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium">Gemini AI</div>
+              <div className="font-medium">Anthropic AI</div>
               <div className="text-sm text-muted-foreground">
                 AI-powered inventory analysis and chat
               </div>

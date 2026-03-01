@@ -278,7 +278,7 @@ export async function exportFileContent(
     );
   }
 
-  // PDFs → extract text via Gemini
+  // PDFs → extract text via AI
   if (mimeType === "application/pdf") {
     return extractPdfText(fileId);
   }
@@ -298,7 +298,7 @@ export async function exportFileContent(
   return `[Unsupported file format: ${mimeType}]`;
 }
 
-/** Extract text from a PDF using Gemini 2.0 Flash */
+/** Extract text from a PDF using Anthropic Claude */
 async function extractPdfText(fileId: string): Promise<string> {
   const pdfBuffer = await googleFetchBuffer(
     `${DRIVE_API_BASE}/files/${fileId}?alt=media`

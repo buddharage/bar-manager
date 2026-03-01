@@ -23,7 +23,7 @@ You can search Gmail live for receipts, invoices, and order confirmations using 
 Relevant documents from Google Drive are automatically provided as context below when available.
 Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.`;
 
-// Tool definitions for Gemini function calling
+// Tool definitions for AI function calling
 const tools: Tool[] = [
   {
     functionDeclarations: [
@@ -356,7 +356,7 @@ export async function chat(
 
   let result: GenerateContentResult = await chatSession.sendMessage(lastMessage.content);
 
-  // Accumulate token usage from Gemini response metadata
+  // Accumulate token usage from response metadata
   function trackTokens(r: GenerateContentResult) {
     const meta = r.response.usageMetadata;
     if (meta) {
@@ -369,7 +369,7 @@ export async function chat(
 
   trackTokens(result);
 
-  // Handle tool calls in a loop (Gemini may call multiple tools)
+  // Handle tool calls in a loop (the model may call multiple tools)
   while (result.response.candidates?.[0]?.content?.parts?.some((p) => p.functionCall)) {
     const functionCalls = result.response.candidates[0].content.parts.filter(
       (p) => p.functionCall
