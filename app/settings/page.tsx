@@ -18,6 +18,12 @@ interface SyncLogEntry {
   completed_at: string | null;
 }
 
+interface XtrachefStatus {
+  lastSync: SyncLogEntry | null;
+  recipeCount: number;
+  ingredientCount: number;
+}
+
 function SettingsContent() {
   const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [syncing, setSyncing] = useState(false);
@@ -25,6 +31,7 @@ function SettingsContent() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const [xtrachefStatus, setXtrachefStatus] = useState<XtrachefStatus | null>(null);
   const searchParams = useSearchParams();
   const supabaseRef = useRef(createClient());
 
@@ -40,6 +47,7 @@ function SettingsContent() {
   useEffect(() => {
     loadSyncLogs();
     checkGoogleConnection();
+    loadXtrachefStatus();
   }, [loadSyncLogs]);
 
   // Poll sync logs every 3s while a sync is in progress
@@ -128,6 +136,18 @@ function SettingsContent() {
     if (!window.confirm("Disconnect Google account? Synced documents will be preserved.")) return;
     await fetch("/api/auth/google/status", { method: "DELETE" });
     setGoogleConnected(false);
+  }
+
+  async function loadXtrachefStatus() {
+    try {
+      const res = await fetch("/api/sync/xtrachef");
+      if (res.ok) {
+        const data = await res.json();
+        setXtrachefStatus(data);
+      }
+    } catch {
+      // Table may not exist yet
+    }
   }
 
   return (
@@ -221,6 +241,74 @@ function SettingsContent() {
               <a href="/api/auth/google">Connect Google</a>
             </Button>
           )}
+        </CardContent>
+      </Card>
+
+      {/* xtraCHEF Recipes */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>xtraCHEF Recipes</CardTitle>
+            {xtrachefStatus?.lastSync?.status === "success" ? (
+              <Badge variant="default">Synced</Badge>
+            ) : (
+              <Badge variant="secondary">Not synced</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Sync recipes, prep recipes, and ingredients from xtraCHEF.
+            Since xtraCHEF has no public API, syncing uses browser automation
+            via Playwright to scrape your recipe data.
+          </p>
+
+          {xtrachefStatus && (
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <div className="text-muted-foreground">Recipes</div>
+                <div className="text-lg font-semibold">{xtrachefStatus.recipeCount}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Ingredients</div>
+                <div className="text-lg font-semibold">{xtrachefStatus.ingredientCount}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Last sync</div>
+                <div className="text-lg font-semibold">
+                  {xtrachefStatus.lastSync?.completed_at
+                    ? new Date(xtrachefStatus.lastSync.completed_at).toLocaleDateString()
+                    : "Never"}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">How to sync</p>
+            <div className="rounded border bg-muted/50 p-3 text-sm space-y-2">
+              <p className="text-muted-foreground">
+                1. Install Playwright (first time only):
+              </p>
+              <code className="block rounded bg-muted px-2 py-1 text-xs">
+                npm install -D playwright && npx playwright install chromium
+              </code>
+              <p className="text-muted-foreground">
+                2. Run the sync script (opens browser for login on first run):
+              </p>
+              <code className="block rounded bg-muted px-2 py-1 text-xs">
+                npx tsx scripts/sync-xtrachef.ts
+              </code>
+              <p className="text-muted-foreground">
+                3. After initial login, run headless for faster syncs:
+              </p>
+              <code className="block rounded bg-muted px-2 py-1 text-xs">
+                npx tsx scripts/sync-xtrachef.ts --headless
+              </code>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
