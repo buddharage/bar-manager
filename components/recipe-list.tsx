@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -186,6 +187,14 @@ function SortableHead({
 }
 
 // ---------------------------------------------------------------------------
+// Helper: slugify group names for tab values
+// ---------------------------------------------------------------------------
+
+function groupSlug(group: string) {
+  return group.replace(/\s+/g, "-").toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
 // Main RecipeList component
 // ---------------------------------------------------------------------------
 
@@ -196,6 +205,9 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("");
+  const [scrollTargetId, setScrollTargetId] = useState<number | null>(null);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
 
   // Filters
   const [filterOnMenu, setFilterOnMenu] = useState<"" | "yes" | "no">("");
@@ -212,11 +224,39 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
     [recipes],
   );
 
-  const guidToRecipeId = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of recipes) map.set(r.xtrachef_guid, r.id);
+  // Lookup maps
+  const guidToRecipe = useMemo(() => {
+    const map = new Map<string, Recipe>();
+    for (const r of recipes) map.set(r.xtrachef_guid, r);
     return map;
   }, [recipes]);
+
+  const recipeById = useMemo(() => {
+    const map = new Map<number, Recipe>();
+    for (const r of recipes) map.set(r.id, r);
+    return map;
+  }, [recipes]);
+
+  // Reverse lookup: prep recipe id -> list of recipes that use it as an ingredient
+  const usedInMap = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; group: string }[]>();
+    for (const r of recipes) {
+      for (const ing of r.recipe_ingredients) {
+        if (ing.type === "Prep recipe" && ing.reference_guid) {
+          const prepRecipe = guidToRecipe.get(ing.reference_guid);
+          if (prepRecipe) {
+            const list = map.get(prepRecipe.id) || [];
+            // Avoid duplicates
+            if (!list.some((x) => x.id === r.id)) {
+              list.push({ id: r.id, name: r.name, group: r.recipe_group || "Uncategorized" });
+            }
+            map.set(prepRecipe.id, list);
+          }
+        }
+      }
+    }
+    return map;
+  }, [recipes, guidToRecipe]);
 
   // Filter + search
   const filtered = useMemo(() => {
@@ -238,6 +278,29 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
     () => [...new Set(filtered.map((r) => r.recipe_group || "Uncategorized"))],
     [filtered],
   );
+
+  // Set initial active tab
+  useEffect(() => {
+    if (groups.length > 0 && (!activeTab || !groups.some((g) => groupSlug(g) === activeTab))) {
+      setActiveTab(groupSlug(groups[0]));
+    }
+  }, [groups, activeTab]);
+
+  // Scroll to target recipe after tab switch + render
+  useEffect(() => {
+    if (scrollTargetId == null) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`recipe-${scrollTargetId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightId(scrollTargetId);
+        // Clear highlight after animation
+        setTimeout(() => setHighlightId(null), 2000);
+      }
+      setScrollTargetId(null);
+    }, 50); // short delay to let the tab content render
+    return () => clearTimeout(timer);
+  }, [scrollTargetId, activeTab]);
 
   // Sort within groups
   function sortRecipes(list: Recipe[]): Recipe[] {
@@ -265,6 +328,25 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
       return next;
     });
   }
+
+  // Navigate to a recipe: switch tab, expand it, scroll to it
+  const navigateToRecipe = useCallback(
+    (recipeId: number) => {
+      const target = recipeById.get(recipeId);
+      if (!target) return;
+
+      const targetGroup = target.recipe_group || "Uncategorized";
+      const targetSlug = groupSlug(targetGroup);
+
+      // Switch tab
+      setActiveTab(targetSlug);
+      // Expand the target recipe
+      setExpandedIds((prev) => new Set(prev).add(recipeId));
+      // Queue scroll
+      setScrollTargetId(recipeId);
+    },
+    [recipeById],
+  );
 
   // Persist an editable field update
   const updateRecipe = useCallback(
@@ -370,20 +452,6 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
             </Button>
           )}
         </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {groups.map((group) => (
-            <a
-              key={group}
-              href={`#group-${group.replace(/\s+/g, "-")}`}
-              className="inline-block"
-            >
-              <Badge variant="outline" className="cursor-pointer hover:bg-accent text-xs">
-                {group}
-              </Badge>
-            </a>
-          ))}
-        </div>
       </div>
 
       {filtered.length === 0 && (search.trim() || hasActiveFilters) && (
@@ -392,58 +460,78 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
         </p>
       )}
 
-      {groups.map((group) => {
-        const groupRecipes = sortRecipes(
-          filtered.filter((r) => (r.recipe_group || "Uncategorized") === group),
-        );
+      {/* Category tabs */}
+      {groups.length > 0 && (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList variant="line" className="flex flex-wrap gap-1 w-full justify-start">
+            {groups.map((group) => {
+              const count = filtered.filter(
+                (r) => (r.recipe_group || "Uncategorized") === group,
+              ).length;
+              return (
+                <TabsTrigger key={group} value={groupSlug(group)}>
+                  {group}
+                  <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">
+                    {count}
+                  </Badge>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
 
-        return (
-          <Card key={group} id={`group-${group.replace(/\s+/g, "-")}`}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>{group}</span>
-                <Badge variant="secondary">{groupRecipes.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Created At" sortKey="created_at_label" currentSort={sort} onSort={handleSort} />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupRecipes.map((recipe) => {
-                    const hasIngredients = recipe.recipe_ingredients?.length > 0;
-                    const isExpanded = expandedIds.has(recipe.id);
+          {groups.map((group) => {
+            const groupRecipes = sortRecipes(
+              filtered.filter((r) => (r.recipe_group || "Uncategorized") === group),
+            );
 
-                    return (
-                      <ExpandableRecipeRow
-                        key={recipe.id}
-                        recipe={recipe}
-                        hasIngredients={hasIngredients}
-                        isExpanded={isExpanded}
-                        onToggle={() => toggleExpanded(recipe.id)}
-                        guidToRecipeId={guidToRecipeId}
-                        creatorOptions={creatorOptions}
-                        createdAtOptions={createdAtOptions}
-                        onUpdate={updateRecipe}
-                      />
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        );
-      })}
+            return (
+              <TabsContent key={group} value={groupSlug(group)}>
+                <Card>
+                  <CardContent className="pt-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
+                          <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
+                          <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
+                          <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
+                          <SortableHead label="Created At" sortKey="created_at_label" currentSort={sort} onSort={handleSort} />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {groupRecipes.map((recipe) => {
+                          const hasIngredients = recipe.recipe_ingredients?.length > 0;
+                          const isExpanded = expandedIds.has(recipe.id);
+
+                          return (
+                            <ExpandableRecipeRow
+                              key={recipe.id}
+                              recipe={recipe}
+                              hasIngredients={hasIngredients}
+                              isExpanded={isExpanded}
+                              isHighlighted={highlightId === recipe.id}
+                              onToggle={() => toggleExpanded(recipe.id)}
+                              guidToRecipe={guidToRecipe}
+                              usedIn={usedInMap.get(recipe.id)}
+                              onNavigate={navigateToRecipe}
+                              creatorOptions={creatorOptions}
+                              createdAtOptions={createdAtOptions}
+                              onUpdate={updateRecipe}
+                            />
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            );
+          })}
+        </Tabs>
+      )}
     </div>
   );
 }
@@ -456,8 +544,11 @@ function ExpandableRecipeRow({
   recipe,
   hasIngredients,
   isExpanded,
+  isHighlighted,
   onToggle,
-  guidToRecipeId,
+  guidToRecipe,
+  usedIn,
+  onNavigate,
   creatorOptions,
   createdAtOptions,
   onUpdate,
@@ -465,8 +556,11 @@ function ExpandableRecipeRow({
   recipe: Recipe;
   hasIngredients: boolean;
   isExpanded: boolean;
+  isHighlighted: boolean;
   onToggle: () => void;
-  guidToRecipeId: Map<string, number>;
+  guidToRecipe: Map<string, Recipe>;
+  usedIn?: { id: number; name: string; group: string }[];
+  onNavigate: (recipeId: number) => void;
   creatorOptions: string[];
   createdAtOptions: string[];
   onUpdate: (id: number, field: string, value: unknown) => void;
@@ -475,7 +569,9 @@ function ExpandableRecipeRow({
     <>
       <TableRow
         id={`recipe-${recipe.id}`}
-        className={hasIngredients ? "cursor-pointer hover:bg-muted/50" : ""}
+        className={`${hasIngredients ? "cursor-pointer hover:bg-muted/50" : ""} ${
+          isHighlighted ? "bg-blue-100 dark:bg-blue-900/30 transition-colors duration-1000" : ""
+        }`}
         onClick={hasIngredients ? onToggle : undefined}
       >
         <TableCell className="font-medium">
@@ -551,7 +647,7 @@ function ExpandableRecipeRow({
         </TableCell>
       </TableRow>
 
-      {isExpanded && (recipe.notes || recipe.serving_size != null || recipe.instructions || recipe.image_url) && (
+      {isExpanded && (recipe.notes || recipe.serving_size != null || recipe.instructions || recipe.image_url || (usedIn && usedIn.length > 0)) && (
         <TableRow className="bg-muted/30">
           <TableCell colSpan={COL_COUNT} className="py-3 px-10">
             <div className="flex gap-6">
@@ -581,6 +677,26 @@ function ExpandableRecipeRow({
                     <span className="whitespace-pre-line">{recipe.instructions}</span>
                   </div>
                 )}
+                {usedIn && usedIn.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-medium text-muted-foreground">Used in:</span>
+                    {usedIn.map((ref, i) => (
+                      <span key={ref.id}>
+                        <button
+                          type="button"
+                          className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onNavigate(ref.id);
+                          }}
+                        >
+                          {ref.name}
+                        </button>
+                        {i < usedIn.length - 1 && <span className="text-muted-foreground">,</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </TableCell>
@@ -588,23 +704,26 @@ function ExpandableRecipeRow({
       )}
 
       {isExpanded && recipe.recipe_ingredients.map((ing) => {
-        const linkedRecipeId =
+        const linkedRecipe =
           ing.type === "Prep recipe" && ing.reference_guid
-            ? guidToRecipeId.get(ing.reference_guid)
+            ? guidToRecipe.get(ing.reference_guid)
             : undefined;
 
         return (
           <TableRow key={ing.id} className="bg-muted/30">
             <TableCell className="pl-10 text-sm">
               <span className="flex items-center gap-1.5">
-                {linkedRecipeId != null ? (
-                  <a
-                    href={`#recipe-${linkedRecipeId}`}
+                {linkedRecipe ? (
+                  <button
+                    type="button"
                     className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate(linkedRecipe.id);
+                    }}
                   >
                     {ing.name}
-                  </a>
+                  </button>
                 ) : (
                   ing.name
                 )}
