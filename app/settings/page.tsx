@@ -159,9 +159,14 @@ function SettingsContent() {
     setSavingToken(true);
     try {
       const supabase = createClient();
-      await supabase
+      const { error } = await supabase
         .from("settings")
         .upsert({ key: "xtrachef_token", value: xtrachefToken.trim() }, { onConflict: "key" });
+      if (error) {
+        alert(`Failed to save token: ${error.message}`);
+        setSavingToken(false);
+        return;
+      }
       setXtrachefToken("");
       loadXtrachefStatus();
       alert("Bearer token saved.");
