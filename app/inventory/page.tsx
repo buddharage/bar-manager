@@ -759,6 +759,17 @@ export default function InventoryPage() {
           </span>
         </TableCell>
 
+        {/* Par Level — hidden on mobile */}
+        <TableCell className="hidden md:table-cell text-right">
+          {item.par_level != null ? (
+            <span>
+              {item.par_level} {item.unit || ""}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{"\u2014"}</span>
+          )}
+        </TableCell>
+
         {/* Category — hidden on mobile */}
         <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
           {item.category || "\u2014"}
@@ -774,17 +785,6 @@ export default function InventoryPage() {
                   ({Math.round(baseToPurchase(item.current_quantity, item.purchase_unit_quantity) * 100) / 100} {item.purchase_unit}s)
                 </span>
               ) : null}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{"\u2014"}</span>
-          )}
-        </TableCell>
-
-        {/* Par Level — hidden on mobile */}
-        <TableCell className="hidden md:table-cell text-right">
-          {item.par_level != null ? (
-            <span>
-              {item.par_level} {item.unit || ""}
             </span>
           ) : (
             <span className="text-muted-foreground">{"\u2014"}</span>
@@ -963,8 +963,6 @@ export default function InventoryPage() {
                     <span className="md:hidden inline-flex items-center" title="Expected Inventory"><ExpectedIcon /></span>
                     <span className="hidden md:inline">Expected Inventory</span>
                   </SortableHead>
-                  <TableHead className="hidden md:table-cell">Category</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Last Count</TableHead>
                   <SortableHead
                     label="Par Level"
                     field="par_level"
@@ -973,6 +971,8 @@ export default function InventoryPage() {
                     onSort={handleSort}
                     className="hidden md:table-cell text-right"
                   />
+                  <TableHead className="hidden md:table-cell">Category</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Last Count</TableHead>
                   <SortableHead
                     label="Status"
                     field="status"

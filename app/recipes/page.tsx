@@ -43,6 +43,7 @@ export default async function RecipesPage() {
     image_url: string | null;
     instructions: string | null;
     on_menu: boolean;
+    refrigerate: boolean;
     creator: string | null;
     created_at_label: string | null;
     last_synced_at: string | null;

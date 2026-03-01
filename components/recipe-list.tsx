@@ -40,6 +40,7 @@ interface Recipe {
   image_url: string | null;
   instructions: string | null;
   on_menu: boolean;
+  refrigerate: boolean;
   creator: string | null;
   created_at_label: string | null;
   recipe_ingredients: RecipeIngredient[];
