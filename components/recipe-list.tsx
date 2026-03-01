@@ -35,6 +35,10 @@ interface Recipe {
   prime_cost: number | null;
   food_cost_pct: number | null;
   toast_item_guid: string | null;
+  serving_size: number | null;
+  notes: string | null;
+  image_url: string | null;
+  instructions: string | null;
   recipe_ingredients: RecipeIngredient[];
 }
 
@@ -218,6 +222,42 @@ function ExpandableRecipeRow({
           {recipe.toast_item_guid ? "Linked" : "—"}
         </TableCell>
       </TableRow>
+
+      {isExpanded && (recipe.notes || recipe.serving_size != null || recipe.instructions || recipe.image_url) && (
+        <TableRow className="bg-muted/30">
+          <TableCell colSpan={7} className="py-3 px-10">
+            <div className="flex gap-6">
+              {recipe.image_url && (
+                <img
+                  src={recipe.image_url}
+                  alt={recipe.name}
+                  className="w-24 h-24 object-cover rounded"
+                />
+              )}
+              <div className="space-y-1.5 text-sm">
+                {recipe.serving_size != null && (
+                  <p>
+                    <span className="font-medium text-muted-foreground">Serving Size:</span>{" "}
+                    {Number(recipe.serving_size)}
+                  </p>
+                )}
+                {recipe.notes && (
+                  <p>
+                    <span className="font-medium text-muted-foreground">Notes:</span>{" "}
+                    {recipe.notes}
+                  </p>
+                )}
+                {recipe.instructions && (
+                  <div>
+                    <span className="font-medium text-muted-foreground">Instructions:</span>{" "}
+                    <span className="whitespace-pre-line">{recipe.instructions}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
 
       {isExpanded && recipe.recipe_ingredients.map((ing) => {
         const linkedRecipeId =

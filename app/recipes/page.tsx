@@ -39,6 +39,10 @@ export default async function RecipesPage() {
     prime_cost: number | null;
     food_cost_pct: number | null;
     toast_item_guid: string | null;
+    serving_size: number | null;
+    notes: string | null;
+    image_url: string | null;
+    instructions: string | null;
     last_synced_at: string | null;
     recipe_ingredients: Array<{
       id: number;
