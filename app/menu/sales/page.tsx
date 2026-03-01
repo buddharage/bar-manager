@@ -248,7 +248,7 @@ export default function MenuSalesPage() {
           )}
           {earliestDataDate && dataIngestedAt && " · "}
           {dataIngestedAt && (
-            <>First ingested: {new Date(dataIngestedAt).toLocaleString()}</>
+            <>First synced: {new Date(dataIngestedAt).toLocaleString()}</>
           )}
         </p>
       )}

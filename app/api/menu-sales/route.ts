@@ -171,19 +171,20 @@ export async function GET(request: NextRequest) {
   const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalRevenue = items.reduce((sum, i) => sum + i.revenue, 0);
 
-  // Find earliest ingestion timestamp for this data set, and the overall
+  // Find the earliest successful Toast sync timestamp and the overall
   // earliest/latest dates with data (unfiltered) so the UI can show coverage.
-  let earliestIngestQuery = supabase
-    .from("order_items")
-    .select("created_at")
-    .order("created_at", { ascending: true })
-    .limit(1);
-  if (startDate) earliestIngestQuery = earliestIngestQuery.gte("date", startDate);
-  if (endDate) earliestIngestQuery = earliestIngestQuery.lte("date", endDate);
-
-  const [{ data: earliestRow }, { data: earliestDateRow }, { data: latestDateRow }] =
+  // We use sync_logs instead of order_items.created_at because backfill
+  // deletes and re-inserts rows, resetting created_at to the backfill time.
+  const [{ data: earliestSyncRow }, { data: earliestDateRow }, { data: latestDateRow }] =
     await Promise.all([
-      earliestIngestQuery.single(),
+      supabase
+        .from("sync_logs")
+        .select("started_at")
+        .eq("source", "toast")
+        .eq("status", "success")
+        .order("started_at", { ascending: true })
+        .limit(1)
+        .single(),
       supabase
         .from("order_items")
         .select("date")
@@ -205,7 +206,7 @@ export async function GET(request: NextRequest) {
       totalQuantity,
       totalRevenue,
     },
-    dataIngestedAt: earliestRow?.created_at ?? null,
+    dataIngestedAt: earliestSyncRow?.started_at ?? null,
     earliestDataDate: earliestDateRow?.date ?? null,
     latestDataDate: latestDateRow?.date ?? null,
   });
