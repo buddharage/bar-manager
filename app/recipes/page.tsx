@@ -25,6 +25,7 @@ interface RecipeIngredient {
 interface Recipe {
   id: number;
   xtrachef_id: number;
+  xtrachef_guid: string;
   name: string;
   type: string;
   recipe_group: string | null;
@@ -71,6 +72,12 @@ export default async function RecipesPage() {
   const mainRecipes = allRecipes.filter((r) => r.type === "recipe");
   const prepRecipes = allRecipes.filter((r) => r.type === "prep_recipe");
   const groups = [...new Set(allRecipes.map((r) => r.recipe_group || "Uncategorized"))];
+
+  // Map xtrachef_guid → recipe id for linking prep recipe ingredients
+  const guidToRecipeId = new Map<string, number>();
+  for (const r of allRecipes) {
+    guidToRecipeId.set(r.xtrachef_guid, r.id);
+  }
 
   const lastSync = allRecipes.reduce<string | null>((latest, r) => {
     if (!r.last_synced_at) return latest;
@@ -181,7 +188,7 @@ export default async function RecipesPage() {
                     </TableHeader>
                     <TableBody>
                       {groupRecipes.map((recipe) => (
-                        <TableRow key={recipe.id}>
+                        <TableRow key={recipe.id} id={`recipe-${recipe.id}`}>
                           <TableCell className="font-medium">{recipe.name}</TableCell>
                           <TableCell>
                             <Badge
@@ -237,9 +244,24 @@ export default async function RecipesPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {recipe.recipe_ingredients.map((ing) => (
+                            {recipe.recipe_ingredients.map((ing) => {
+                              const linkedRecipeId = ing.type === "Prep recipe" && ing.reference_guid
+                                ? guidToRecipeId.get(ing.reference_guid)
+                                : undefined;
+                              return (
                               <TableRow key={ing.id}>
-                                <TableCell>{ing.name}</TableCell>
+                                <TableCell>
+                                  {linkedRecipeId != null ? (
+                                    <a
+                                      href={`#recipe-${linkedRecipeId}`}
+                                      className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300"
+                                    >
+                                      {ing.name}
+                                    </a>
+                                  ) : (
+                                    ing.name
+                                  )}
+                                </TableCell>
                                 <TableCell>
                                   {ing.type === "Prep recipe" ? (
                                     <Badge variant="outline" className="text-xs">prep</Badge>
@@ -255,7 +277,8 @@ export default async function RecipesPage() {
                                   {ing.cost != null ? `$${Number(ing.cost).toFixed(4)}` : "—"}
                                 </TableCell>
                               </TableRow>
-                            ))}
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </details>
