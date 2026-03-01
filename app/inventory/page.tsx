@@ -736,22 +736,27 @@ export default function InventoryPage() {
           </span>
         </TableCell>
 
-        {/* Expected Inventory (2nd column) */}
+        {/* Expected Inventory (2nd column) — tappable on mobile to open count dialog */}
         <TableCell
           className={`text-right font-medium ${isBelowPar ? "text-destructive" : ""}`}
         >
-          {item.expected_quantity != null ? (
-            <span>
-              {item.expected_quantity} <span className="hidden md:inline">{item.unit || ""}</span>
-              {item.purchase_unit && item.purchase_unit_quantity ? (
-                <span className="hidden md:inline text-xs text-muted-foreground ml-1">
-                  ({Math.round(baseToPurchase(item.expected_quantity, item.purchase_unit_quantity) * 100) / 100} {item.purchase_unit}s)
-                </span>
-              ) : null}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{"\u2014"}</span>
-          )}
+          <span
+            className="md:cursor-default cursor-pointer md:no-underline underline underline-offset-2"
+            onClick={() => setCountDialogItem(item)}
+          >
+            {item.expected_quantity != null ? (
+              <>
+                {item.expected_quantity} <span className="hidden md:inline">{item.unit || ""}</span>
+                {item.purchase_unit && item.purchase_unit_quantity ? (
+                  <span className="hidden md:inline text-xs text-muted-foreground ml-1">
+                    ({Math.round(baseToPurchase(item.expected_quantity, item.purchase_unit_quantity) * 100) / 100} {item.purchase_unit}s)
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-muted-foreground">{"\u2014"}</span>
+            )}
+          </span>
         </TableCell>
 
         {/* Category — hidden on mobile */}
@@ -798,8 +803,8 @@ export default function InventoryPage() {
             : "Never"}
         </TableCell>
 
-        {/* Actions */}
-        <TableCell className="text-right">
+        {/* Actions — hidden on mobile (count via Expected Inventory tap, rest via detail modal) */}
+        <TableCell className="hidden md:table-cell text-right">
           <div className="flex justify-end gap-1">
             <Button
               variant="outline"
@@ -808,11 +813,9 @@ export default function InventoryPage() {
             >
               Count
             </Button>
-            {/* Settings & History — hidden on mobile (available in detail modal) */}
             <Button
               variant="ghost"
               size="sm"
-              className="hidden md:inline-flex"
               onClick={() => setSettingsDialogItem(item)}
               title="Settings"
             >
@@ -821,7 +824,6 @@ export default function InventoryPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="hidden md:inline-flex"
               onClick={() => setHistoryDialogItem(item)}
               title="Count history"
             >
@@ -980,7 +982,7 @@ export default function InventoryPage() {
                     className="hidden md:table-cell"
                   />
                   <TableHead className="hidden md:table-cell text-right">Counted At</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
