@@ -171,15 +171,32 @@ export async function GET(request: NextRequest) {
   const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalRevenue = items.reduce((sum, i) => sum + i.revenue, 0);
 
-  // Find earliest ingestion timestamp for this data set
-  let earliestQuery = supabase
+  // Find earliest ingestion timestamp for this data set, and the overall
+  // earliest/latest dates with data (unfiltered) so the UI can show coverage.
+  let earliestIngestQuery = supabase
     .from("order_items")
     .select("created_at")
     .order("created_at", { ascending: true })
     .limit(1);
-  if (startDate) earliestQuery = earliestQuery.gte("date", startDate);
-  if (endDate) earliestQuery = earliestQuery.lte("date", endDate);
-  const { data: earliestRow } = await earliestQuery.single();
+  if (startDate) earliestIngestQuery = earliestIngestQuery.gte("date", startDate);
+  if (endDate) earliestIngestQuery = earliestIngestQuery.lte("date", endDate);
+
+  const [{ data: earliestRow }, { data: earliestDateRow }, { data: latestDateRow }] =
+    await Promise.all([
+      earliestIngestQuery.single(),
+      supabase
+        .from("order_items")
+        .select("date")
+        .order("date", { ascending: true })
+        .limit(1)
+        .single(),
+      supabase
+        .from("order_items")
+        .select("date")
+        .order("date", { ascending: false })
+        .limit(1)
+        .single(),
+    ]);
 
   return NextResponse.json({
     items,
@@ -189,5 +206,7 @@ export async function GET(request: NextRequest) {
       totalRevenue,
     },
     dataIngestedAt: earliestRow?.created_at ?? null,
+    earliestDataDate: earliestDateRow?.date ?? null,
+    latestDataDate: latestDateRow?.date ?? null,
   });
 }

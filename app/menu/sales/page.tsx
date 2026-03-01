@@ -78,6 +78,8 @@ export default function MenuSalesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataIngestedAt, setDataIngestedAt] = useState<string | null>(null);
+  const [earliestDataDate, setEarliestDataDate] = useState<string | null>(null);
+  const [latestDataDate, setLatestDataDate] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("quantity");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
@@ -111,11 +113,15 @@ export default function MenuSalesPage() {
         setItems(data.items);
         setSummary(data.summary);
         setDataIngestedAt(data.dataIngestedAt ?? null);
+        setEarliestDataDate(data.earliestDataDate ?? null);
+        setLatestDataDate(data.latestDataDate ?? null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
         setItems([]);
         setSummary(null);
         setDataIngestedAt(null);
+        setEarliestDataDate(null);
+        setLatestDataDate(null);
       } finally {
         setLoading(false);
       }
@@ -232,10 +238,18 @@ export default function MenuSalesPage() {
         </div>
       )}
 
-      {/* Data ingestion timestamp */}
-      {dataIngestedAt && (
+      {/* Data coverage info */}
+      {(earliestDataDate || dataIngestedAt) && (
         <p className="text-sm text-muted-foreground">
-          Data first ingested: {new Date(dataIngestedAt).toLocaleString()}
+          {earliestDataDate && latestDataDate && (
+            <>
+              Data available: {earliestDataDate} to {latestDataDate}
+            </>
+          )}
+          {earliestDataDate && dataIngestedAt && " · "}
+          {dataIngestedAt && (
+            <>First ingested: {new Date(dataIngestedAt).toLocaleString()}</>
+          )}
         </p>
       )}
 
