@@ -62,10 +62,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Sync yesterday's orders
+    // 2. Sync yesterday's orders (use local time components to avoid UTC date shift)
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toISOString().split("T")[0];
+    const dateStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
 
     const { records: orderRecords, ordersProcessed } = await syncOrdersForDate(
       supabase,
