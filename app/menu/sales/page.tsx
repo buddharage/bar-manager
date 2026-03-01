@@ -190,7 +190,17 @@ export default function MenuSalesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Menu Sales</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-semibold">Menu Sales</h1>
+        <a
+          href="https://www.toasttab.com/restaurants/admin/reports/sales/sales-summary"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Open in Toast &darr;
+        </a>
+      </div>
 
       {/* Date filter presets */}
       <div className="flex flex-wrap gap-2">

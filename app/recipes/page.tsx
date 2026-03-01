@@ -70,7 +70,17 @@ export default async function RecipesPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Recipes</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold">Recipes</h1>
+          <a
+            href="https://app.sa.toasttab.com/Recipe/Recipe/NewRecipe"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Open in xtraCHEF &darr;
+          </a>
+        </div>
         <div className="flex gap-2">
           <Badge variant="secondary">{mainRecipes.length} recipes</Badge>
           <Badge variant="secondary">{prepRecipes.length} prep</Badge>
