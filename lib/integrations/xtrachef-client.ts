@@ -12,7 +12,8 @@
  *
  * Endpoints (base: ecs-api-prod.sa.toasttab.com):
  *   Recipe list:
- *     GET /api.recipes-query/api/1.0/recipes-v2/tenants/{tenantId}/location/{locationId}/recipe-summary?isReGenerate=true
+ *     POST /api.recipes-query/api/1.0/recipes-v2/tenants/{tenantId}/location/{locationId}/recipe-summary?isReGenerate=true
+ *     Body: { page, pageSize, orderBy, search, groupNames, typeFilter, isSortAll, isFromAVT, groupGuid }
  *     → Returns all recipes with name, type, group, cost, Toast linkage
  *
  *   Recipe detail (per recipe):
@@ -152,18 +153,28 @@ export class XtrachefClient {
     this.token = opts.token;
   }
 
-  private async apiFetch<T>(url: string): Promise<T> {
+  private async apiFetch<T>(
+    url: string,
+    opts?: { method?: string; body?: unknown },
+  ): Promise<T> {
     // The token may already include "Bearer " prefix — normalize it
     const bearer = this.token.startsWith("Bearer ")
       ? this.token
       : `Bearer ${this.token}`;
 
-    const res = await fetch(url, {
-      headers: {
-        authorization: bearer,
-        accept: "application/json",
-      },
-    });
+    const method = opts?.method ?? "GET";
+    const headers: Record<string, string> = {
+      authorization: bearer,
+      accept: "application/json",
+    };
+    let body: string | undefined;
+
+    if (opts?.body !== undefined) {
+      headers["content-type"] = "application/json";
+      body = JSON.stringify(opts.body);
+    }
+
+    const res = await fetch(url, { method, headers, body });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -179,7 +190,20 @@ export class XtrachefClient {
   async fetchRecipeSummaries(): Promise<XCRecipeSummary[]> {
     const url =
       `${API_BASE}/tenants/${this.tenantId}/location/${this.locationId}/recipe-summary?isReGenerate=true`;
-    const res = await this.apiFetch<XCRecipeSummaryResponse>(url);
+    const res = await this.apiFetch<XCRecipeSummaryResponse>(url, {
+      method: "POST",
+      body: {
+        page: 1,
+        pageSize: 10000,
+        orderBy: "lastModified,desc",
+        search: "",
+        groupNames: [],
+        typeFilter: [],
+        isSortAll: true,
+        isFromAVT: false,
+        groupGuid: "",
+      },
+    });
 
     if (res.exception) {
       throw new Error(`xtraCHEF exception: ${JSON.stringify(res.exception)}`);

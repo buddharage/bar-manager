@@ -131,7 +131,7 @@ async function main() {
       await supabase
         .from("sync_logs")
         .update({
-          status: result.errors.length > 0 ? "partial" : "success",
+          status: result.errors.length > 0 ? "error" : "success",
           records_synced: result.recipesUpserted,
           completed_at: new Date().toISOString(),
         })
