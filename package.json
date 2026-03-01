@@ -9,8 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "sync:xtrachef": "tsx scripts/sync-xtrachef.ts",
-    "sync:xtrachef:headless": "tsx scripts/sync-xtrachef.ts --headless"
+    "sync:xtrachef": "tsx scripts/sync-xtrachef.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -32,7 +31,6 @@
     "@types/react-dom": "^19",
     "dotenv": "^16.5.0",
     "eslint": "^9",
-    "playwright": "^1.52.0",
     "eslint-config-next": "16.1.6",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4",

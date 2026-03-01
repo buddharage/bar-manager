@@ -1,33 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { verifyRequest } from "@/lib/auth/session";
-
-interface IngredientPayload {
-  name: string;
-  quantity: number | null;
-  unit: string | null;
-  cost: number | null;
-}
-
-interface RecipePayload {
-  xtrachefId: string | null;
-  name: string;
-  category: string | null;
-  type: "recipe" | "prep_recipe";
-  yieldQuantity: number | null;
-  yieldUnit: string | null;
-  cost: number | null;
-  ingredients: IngredientPayload[];
-}
+import { XtrachefClient } from "@/lib/integrations/xtrachef-client";
+import { syncXtrachefRecipes } from "@/lib/sync/xtrachef-recipes";
 
 /**
  * POST /api/sync/xtrachef
  *
- * Accepts scraped xtraCHEF recipe data and upserts into the database.
- * Body: { recipes: RecipePayload[] }
- *
- * This endpoint is called by the CLI sync script or can accept
- * manually posted recipe data.
+ * Triggers a full xtraCHEF recipe sync by calling the internal API directly.
+ * Requires XTRACHEF_TENANT_ID, XTRACHEF_LOCATION_ID env vars and
+ * an xtraCHEF session cookie stored in the `settings` table.
  */
 export async function POST(request: NextRequest) {
   if (!(await verifyRequest(request))) {
@@ -35,6 +17,30 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServerClient();
+
+  // Load xtraCHEF auth cookie from settings
+  const { data: cookieSetting } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "xtrachef_cookie")
+    .single();
+
+  if (!cookieSetting?.value) {
+    return NextResponse.json(
+      { error: "xtraCHEF session cookie not configured. Paste it in Settings." },
+      { status: 400 },
+    );
+  }
+
+  const tenantId = process.env.XTRACHEF_TENANT_ID;
+  const locationId = process.env.XTRACHEF_LOCATION_ID;
+
+  if (!tenantId || !locationId) {
+    return NextResponse.json(
+      { error: "XTRACHEF_TENANT_ID and XTRACHEF_LOCATION_ID must be set in env" },
+      { status: 500 },
+    );
+  }
 
   // Create sync log
   const { data: syncLog } = await supabase
@@ -44,138 +50,35 @@ export async function POST(request: NextRequest) {
     .single();
 
   try {
-    const body = await request.json();
-    const recipes: RecipePayload[] = body.recipes;
+    const client = new XtrachefClient({
+      tenantId,
+      locationId,
+      cookie: cookieSetting.value,
+    });
 
-    if (!Array.isArray(recipes) || recipes.length === 0) {
-      return NextResponse.json({ error: "No recipes provided" }, { status: 400 });
-    }
+    const result = await syncXtrachefRecipes(supabase, client);
 
-    let totalRecords = 0;
-
-    for (const recipe of recipes) {
-      // Upsert recipe
-      const recipeRow = {
-        xtrachef_id: recipe.xtrachefId,
-        name: recipe.name,
-        category: recipe.category,
-        type: recipe.type,
-        yield_quantity: recipe.yieldQuantity,
-        yield_unit: recipe.yieldUnit,
-        cost: recipe.cost,
-        last_synced_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      let recipeId: number;
-
-      if (recipe.xtrachefId) {
-        const { data, error } = await supabase
-          .from("recipes")
-          .upsert(recipeRow, { onConflict: "xtrachef_id" })
-          .select("id")
-          .single();
-        if (error) continue;
-        recipeId = data.id;
-      } else {
-        const { data: existing } = await supabase
-          .from("recipes")
-          .select("id")
-          .eq("name", recipe.name)
-          .limit(1)
-          .single();
-
-        if (existing) {
-          await supabase.from("recipes").update(recipeRow).eq("id", existing.id);
-          recipeId = existing.id;
-        } else {
-          const { data, error } = await supabase
-            .from("recipes")
-            .insert(recipeRow)
-            .select("id")
-            .single();
-          if (error) continue;
-          recipeId = data.id;
-        }
-      }
-
-      // Replace ingredient links
-      await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
-
-      for (const ing of recipe.ingredients) {
-        // Upsert ingredient
-        const { data: existingIng } = await supabase
-          .from("ingredients")
-          .select("id")
-          .eq("name", ing.name)
-          .limit(1)
-          .single();
-
-        let ingredientId: number | null = null;
-
-        if (existingIng) {
-          ingredientId = existingIng.id;
-          if (ing.cost != null && ing.quantity) {
-            await supabase
-              .from("ingredients")
-              .update({
-                cost_per_unit: ing.cost / ing.quantity,
-                unit: ing.unit,
-                last_synced_at: new Date().toISOString(),
-              })
-              .eq("id", ingredientId);
-          }
-        } else {
-          const { data: newIng } = await supabase
-            .from("ingredients")
-            .insert({
-              name: ing.name,
-              unit: ing.unit,
-              cost_per_unit: ing.cost && ing.quantity ? ing.cost / ing.quantity : null,
-              last_synced_at: new Date().toISOString(),
-            })
-            .select("id")
-            .single();
-          ingredientId = newIng?.id || null;
-        }
-
-        // Check for sub-recipe reference
-        const { data: subRecipe } = await supabase
-          .from("recipes")
-          .select("id")
-          .eq("name", ing.name)
-          .eq("type", "prep_recipe")
-          .limit(1)
-          .single();
-
-        await supabase.from("recipe_ingredients").insert({
-          recipe_id: recipeId,
-          ingredient_id: ingredientId,
-          sub_recipe_id: subRecipe?.id || null,
-          name: ing.name,
-          quantity: ing.quantity,
-          unit: ing.unit,
-          cost: ing.cost,
-        });
-      }
-
-      totalRecords++;
-    }
-
+    // Update sync log
     if (syncLog) {
       await supabase
         .from("sync_logs")
         .update({
-          status: "success",
-          records_synced: totalRecords,
+          status: result.errors.length > 0 ? "partial" : "success",
+          records_synced: result.recipesUpserted,
           completed_at: new Date().toISOString(),
+          ...(result.errors.length > 0
+            ? { error: result.errors.join("; ") }
+            : {}),
         })
         .eq("id", syncLog.id);
     }
 
     return NextResponse.json({
       success: true,
-      records_synced: totalRecords,
+      recipes_synced: result.recipesUpserted,
+      ingredient_lines: result.ingredientLinesInserted,
+      raw_ingredients: result.rawIngredientsUpserted,
+      errors: result.errors,
     });
   } catch (error) {
     if (syncLog) {
@@ -192,7 +95,7 @@ export async function POST(request: NextRequest) {
     console.error("xtraCHEF sync error:", error);
     return NextResponse.json(
       { error: "Sync failed", details: String(error) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -200,7 +103,7 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/sync/xtrachef
  *
- * Returns the latest xtraCHEF sync status.
+ * Returns the latest xtraCHEF sync status and recipe counts.
  */
 export async function GET(request: NextRequest) {
   if (!(await verifyRequest(request))) {
@@ -225,9 +128,17 @@ export async function GET(request: NextRequest) {
     .from("ingredients")
     .select("*", { count: "exact", head: true });
 
+  // Check if cookie is configured
+  const { data: cookieSetting } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "xtrachef_cookie")
+    .single();
+
   return NextResponse.json({
     lastSync,
     recipeCount: recipeCount || 0,
     ingredientCount: ingredientCount || 0,
+    hasCookie: !!cookieSetting?.value,
   });
 }

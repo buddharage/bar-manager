@@ -1,65 +1,79 @@
--- Recipes & Ingredients (synced from xtraCHEF)
--- Supports recipes, prep recipes, and raw ingredients with
--- recipe-ingredient links for cost roll-up and ordering alerts.
+-- Recipes & Ingredients (synced from xtraCHEF internal API)
+--
+-- xtraCHEF API endpoints:
+--   Summary: ecs-api-prod.sa.toasttab.com/api.recipes-query/api/1.0/recipes-v2/tenants/{t}/location/{l}/recipe-summary
+--   Detail:  ecs-api-prod.sa.toasttab.com/api.recipes-query/api/1.0/recipes-v2/{recipeId}/tenants/{t}/locations/{l}/recipe-details
 
 -- ============================================================
 -- Recipes (cocktails, dishes, prep batches)
 -- ============================================================
 create table recipes (
-  id              bigint generated always as identity primary key,
-  xtrachef_id     text unique,
-  name            text not null,
-  category        text,
-  type            text not null default 'recipe' check (type in ('recipe', 'prep_recipe')),
-  yield_quantity  numeric(10,3),
-  yield_unit      text,
-  cost            numeric(10,4),
-  last_synced_at  timestamptz,
-  created_at      timestamptz default now(),
-  updated_at      timestamptz default now()
+  id                bigint generated always as identity primary key,
+  xtrachef_id       integer unique not null,
+  xtrachef_guid     text unique not null,
+  name              text not null,
+  type              text not null check (type in ('recipe', 'prep_recipe')),
+  recipe_group      text,
+  status            text,
+  menu_price        numeric(10,2),
+  prime_cost        numeric(10,4),
+  food_cost_pct     numeric(10,4),
+  toast_item_guid   text,
+  serving_size      numeric(10,3),
+  batch_size        numeric(10,3),
+  batch_uom         text,
+  last_modified_at  timestamptz,
+  last_modified_by  text,
+  last_synced_at    timestamptz,
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now()
 );
 
 create index idx_recipes_type on recipes (type);
-create index idx_recipes_category on recipes (category);
+create index idx_recipes_group on recipes (recipe_group);
+create index idx_recipes_toast_item on recipes (toast_item_guid)
+  where toast_item_guid is not null;
 
 -- ============================================================
--- Ingredients (raw materials: limes, vodka, pineapple juice…)
+-- Recipe ingredients (bill of materials)
+-- Each line references either a raw ingredient or a prep recipe.
+-- type = 'Ingredient' | 'Prep recipe'
+-- ============================================================
+create table recipe_ingredients (
+  id                bigint generated always as identity primary key,
+  recipe_id         bigint not null references recipes(id) on delete cascade,
+  xtrachef_id       integer,
+  name              text not null,
+  type              text not null,
+  quantity          numeric(10,3),
+  uom               text,
+  cost              numeric(10,4),
+  reference_id      text,
+  reference_guid    text,
+  ingredient_yield  numeric(10,3),
+  created_at        timestamptz default now()
+);
+
+create index idx_recipe_ingredients_recipe on recipe_ingredients (recipe_id);
+create index idx_recipe_ingredients_ref on recipe_ingredients (reference_guid)
+  where reference_guid is not null;
+
+-- ============================================================
+-- Ingredients (unique raw materials across all recipes)
+-- Populated during sync from recipe_ingredients where type != 'Prep recipe'.
+-- inventory_item_id can be manually linked to Toast inventory.
 -- ============================================================
 create table ingredients (
-  id              bigint generated always as identity primary key,
-  xtrachef_id     text unique,
-  name            text not null,
-  category        text,
-  unit            text,
-  cost_per_unit   numeric(10,4),
+  id                bigint generated always as identity primary key,
+  name              text unique not null,
+  category          text,
+  unit              text,
+  cost_per_unit     numeric(10,4),
   inventory_item_id bigint references inventory_items(id) on delete set null,
-  last_synced_at  timestamptz,
-  created_at      timestamptz default now()
+  last_synced_at    timestamptz,
+  created_at        timestamptz default now()
 );
 
 create index idx_ingredients_name on ingredients (name);
 create index idx_ingredients_inventory on ingredients (inventory_item_id)
   where inventory_item_id is not null;
-
--- ============================================================
--- Recipe ingredients (bill of materials)
--- A recipe line can reference either a raw ingredient or a
--- sub-recipe (prep recipe used as a component).
--- ============================================================
-create table recipe_ingredients (
-  id              bigint generated always as identity primary key,
-  recipe_id       bigint not null references recipes(id) on delete cascade,
-  ingredient_id   bigint references ingredients(id) on delete set null,
-  sub_recipe_id   bigint references recipes(id) on delete set null,
-  name            text not null,
-  quantity        numeric(10,3),
-  unit            text,
-  cost            numeric(10,4),
-  created_at      timestamptz default now()
-);
-
-create index idx_recipe_ingredients_recipe on recipe_ingredients (recipe_id);
-create index idx_recipe_ingredients_ingredient on recipe_ingredients (ingredient_id)
-  where ingredient_id is not null;
-create index idx_recipe_ingredients_sub_recipe on recipe_ingredients (sub_recipe_id)
-  where sub_recipe_id is not null;

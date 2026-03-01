@@ -22,6 +22,7 @@ interface XtrachefStatus {
   lastSync: SyncLogEntry | null;
   recipeCount: number;
   ingredientCount: number;
+  hasCookie: boolean;
 }
 
 function SettingsContent() {
@@ -32,6 +33,9 @@ function SettingsContent() {
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [xtrachefStatus, setXtrachefStatus] = useState<XtrachefStatus | null>(null);
+  const [xtrachefCookie, setXtrachefCookie] = useState("");
+  const [savingCookie, setSavingCookie] = useState(false);
+  const [syncingXtrachef, setSyncingXtrachef] = useState(false);
   const searchParams = useSearchParams();
   const supabaseRef = useRef(createClient());
 
@@ -150,6 +154,44 @@ function SettingsContent() {
     }
   }
 
+  async function saveXtrachefCookie() {
+    if (!xtrachefCookie.trim()) return;
+    setSavingCookie(true);
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("settings")
+        .upsert({ key: "xtrachef_cookie", value: xtrachefCookie.trim() }, { onConflict: "key" });
+      setXtrachefCookie("");
+      loadXtrachefStatus();
+      alert("Session cookie saved.");
+    } catch (err) {
+      alert(`Failed to save cookie: ${err}`);
+    }
+    setSavingCookie(false);
+  }
+
+  async function triggerXtrachefSync() {
+    setSyncingXtrachef(true);
+    try {
+      const res = await fetch("/api/sync/xtrachef", { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        alert(`xtraCHEF sync failed: ${data.error}`);
+      } else {
+        const parts = [`${data.recipes_synced} recipes`];
+        if (data.ingredient_lines > 0) parts.push(`${data.ingredient_lines} ingredient lines`);
+        if (data.raw_ingredients > 0) parts.push(`${data.raw_ingredients} raw ingredients`);
+        alert(`xtraCHEF sync complete: ${parts.join(", ")}`);
+      }
+      loadSyncLogs();
+      loadXtrachefStatus();
+    } catch (err) {
+      alert(`xtraCHEF sync error: ${err}`);
+    }
+    setSyncingXtrachef(false);
+  }
+
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
@@ -249,18 +291,25 @@ function SettingsContent() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>xtraCHEF Recipes</CardTitle>
-            {xtrachefStatus?.lastSync?.status === "success" ? (
-              <Badge variant="default">Synced</Badge>
-            ) : (
-              <Badge variant="secondary">Not synced</Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {xtrachefStatus?.hasCookie ? (
+                <Badge variant="default">Cookie saved</Badge>
+              ) : (
+                <Badge variant="secondary">No cookie</Badge>
+              )}
+              <Button
+                onClick={triggerXtrachefSync}
+                disabled={syncingXtrachef || !xtrachefStatus?.hasCookie}
+              >
+                {syncingXtrachef ? "Syncing..." : "Sync Recipes"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Sync recipes, prep recipes, and ingredients from xtraCHEF.
-            Since xtraCHEF has no public API, syncing uses browser automation
-            via Playwright to scrape your recipe data.
+            Calls the internal xtraCHEF API using your session cookie.
           </p>
 
           {xtrachefStatus && (
@@ -286,27 +335,33 @@ function SettingsContent() {
 
           <Separator />
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium">How to sync</p>
-            <div className="rounded border bg-muted/50 p-3 text-sm space-y-2">
-              <p className="text-muted-foreground">
-                1. Install Playwright (first time only):
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium" htmlFor="xc-cookie">
+                Session cookie
+              </label>
+              <p className="text-xs text-muted-foreground mb-1.5">
+                Log into app.sa.toasttab.com, open DevTools &gt; Network, navigate to
+                Recipes, find any request to <code>ecs-api-prod.sa.toasttab.com</code>,
+                and copy the <code>Cookie</code> header value.
               </p>
-              <code className="block rounded bg-muted px-2 py-1 text-xs">
-                npm install -D playwright && npx playwright install chromium
-              </code>
-              <p className="text-muted-foreground">
-                2. Run the sync script (opens browser for login on first run):
-              </p>
-              <code className="block rounded bg-muted px-2 py-1 text-xs">
-                npx tsx scripts/sync-xtrachef.ts
-              </code>
-              <p className="text-muted-foreground">
-                3. After initial login, run headless for faster syncs:
-              </p>
-              <code className="block rounded bg-muted px-2 py-1 text-xs">
-                npx tsx scripts/sync-xtrachef.ts --headless
-              </code>
+              <div className="flex gap-2">
+                <input
+                  id="xc-cookie"
+                  type="password"
+                  className="flex-1 rounded border bg-background px-3 py-1.5 text-sm"
+                  placeholder="Paste cookie value..."
+                  value={xtrachefCookie}
+                  onChange={(e) => setXtrachefCookie(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  onClick={saveXtrachefCookie}
+                  disabled={savingCookie || !xtrachefCookie.trim()}
+                >
+                  {savingCookie ? "Saving..." : "Save"}
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>

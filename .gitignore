@@ -41,5 +41,3 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# xtraCHEF browser state (session cookies)
-.xtrachef-state/
