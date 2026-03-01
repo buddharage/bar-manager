@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bar Manager",
   description: "AI-powered bar operations assistant",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
