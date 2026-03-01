@@ -1,5 +1,5 @@
 import { createServerClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RecipeList } from "@/components/recipe-list";
 
@@ -34,7 +34,6 @@ export default async function RecipesPage() {
     name: string;
     type: string;
     recipe_group: string | null;
-    status: string | null;
     menu_price: number | null;
     prime_cost: number | null;
     food_cost_pct: number | null;
@@ -76,52 +75,6 @@ export default async function RecipesPage() {
           <Badge variant="secondary">{prepRecipes.length} prep</Badge>
           <Badge variant="secondary">{ingredientCount || 0} ingredients</Badge>
         </div>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Recipes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mainRecipes.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Prep Recipes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{prepRecipes.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Groups
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {[...new Set(allRecipes.map((r) => r.recipe_group || "Uncategorized"))].length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Raw Ingredients
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{ingredientCount || 0}</div>
-          </CardContent>
-        </Card>
       </div>
 
       {lastSync && (

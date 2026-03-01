@@ -122,7 +122,6 @@ export interface RecipeRow {
   name: string;
   type: "recipe" | "prep_recipe";
   recipe_group: string | null;
-  status: string | null;
   menu_price: number | null;
   prime_cost: number | null;
   food_cost_pct: number | null;
@@ -272,7 +271,6 @@ export class XtrachefClient {
           name: detail.name,
           type,
           recipe_group: summary.recipeGroups || detail.basicDetail.recipeGroup || null,
-          status: detail.status || summary.status || null,
           menu_price: parseNum(summary.menuPrice),
           prime_cost: parseNum(summary.primeCost),
           food_cost_pct: parseNum(summary.foodCostPercent),

@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       recipes_synced: result.recipesUpserted,
+      recipes_deleted: result.recipesDeleted,
       ingredient_lines: result.ingredientLinesInserted,
       raw_ingredients: result.rawIngredientsUpserted,
       expected_inventory_updated: expectedResult.updated,

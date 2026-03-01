@@ -10,6 +10,7 @@ import { XtrachefClient, type FullRecipe } from "@/lib/integrations/xtrachef-cli
 
 interface SyncResult {
   recipesUpserted: number;
+  recipesDeleted: number;
   ingredientLinesInserted: number;
   rawIngredientsUpserted: number;
   errors: string[];
@@ -64,10 +65,39 @@ export async function syncXtrachefRecipes(
     }
   }
 
-  // 3. Populate the raw ingredients table from unique ingredient lines
+  // 3. Delete recipes that exist in the DB but were NOT returned by xtraCHEF
+  //    (i.e. they were deleted from xtraCHEF since last sync).
+  const syncedXtrachefIds = allRecipes.map((r) => r.recipe.xtrachef_id);
+  let recipesDeleted = 0;
+
+  if (syncedXtrachefIds.length > 0) {
+    // Find local recipes whose xtrachef_id is not in the current xtraCHEF response
+    const { data: localRecipes } = await supabase
+      .from("recipes")
+      .select("id, xtrachef_id")
+      .not("xtrachef_id", "in", `(${syncedXtrachefIds.join(",")})`);
+
+    if (localRecipes && localRecipes.length > 0) {
+      const idsToDelete = localRecipes.map((r: { id: number }) => r.id);
+
+      // Delete the recipes (recipe_ingredients cascade-deletes automatically)
+      const { error: delErr } = await supabase
+        .from("recipes")
+        .delete()
+        .in("id", idsToDelete);
+
+      if (delErr) {
+        errors.push(`Failed to delete stale recipes: ${delErr.message}`);
+      } else {
+        recipesDeleted = idsToDelete.length;
+      }
+    }
+  }
+
+  // 4. Populate the raw ingredients table from unique ingredient lines
   const rawIngredientsUpserted = await populateRawIngredients(supabase, now);
 
-  return { recipesUpserted, ingredientLinesInserted, rawIngredientsUpserted, errors };
+  return { recipesUpserted, recipesDeleted, ingredientLinesInserted, rawIngredientsUpserted, errors };
 }
 
 /**

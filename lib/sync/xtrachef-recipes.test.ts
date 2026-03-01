@@ -84,6 +84,13 @@ function createMockSupabase() {
               }),
             };
           }),
+          // For stale recipe deletion query
+          select: vi.fn(() => ({
+            not: vi.fn().mockResolvedValue({ data: [], error: null }),
+          })),
+          delete: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ error: null }),
+          })),
         };
       }
 
@@ -152,7 +159,6 @@ const SAMPLE_RECIPES: FullRecipe[] = [
       name: "Margarita",
       type: "recipe",
       recipe_group: "Cocktails",
-      status: "Active",
       menu_price: 14,
       prime_cost: 3.5,
       food_cost_pct: 25,
@@ -198,7 +204,6 @@ const SAMPLE_RECIPES: FullRecipe[] = [
       name: "Simple Syrup",
       type: "prep_recipe",
       recipe_group: "Prep",
-      status: "Active",
       menu_price: null,
       prime_cost: 1.2,
       food_cost_pct: null,
@@ -336,6 +341,12 @@ describe("syncXtrachefRecipes", () => {
                   error: { message: "duplicate key" },
                 }),
               }),
+            })),
+            select: vi.fn(() => ({
+              not: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+            delete: vi.fn(() => ({
+              in: vi.fn().mockResolvedValue({ error: null }),
             })),
           };
         }

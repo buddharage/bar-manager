@@ -138,7 +138,7 @@ async function main() {
         .eq("id", syncLog.id);
     }
 
-    console.log(`Done! ${result.recipesUpserted} recipes, ${result.ingredientLinesInserted} ingredient lines, ${result.rawIngredientsUpserted} raw ingredients.\n`);
+    console.log(`Done! ${result.recipesUpserted} recipes synced, ${result.recipesDeleted} deleted, ${result.ingredientLinesInserted} ingredient lines, ${result.rawIngredientsUpserted} raw ingredients.\n`);
   } catch (error) {
     console.error("\nSync failed:", error);
 
