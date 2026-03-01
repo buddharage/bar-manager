@@ -16,19 +16,19 @@ interface ToastOrder {
   guid: string;
   openedDate: string;
   closedDate?: string;
-  totalAmount: number;
-  netAmount: number;
-  taxAmount: number;
-  tipAmount: number;
-  discountAmount: number;
   checks: Array<{
+    // Financial totals live on checks, not orders
+    amount: number; // subtotal after discounts, before tax
+    totalAmount: number; // amount + tax
+    taxAmount: number;
     selections: Array<{
       guid: string;
       item?: { guid: string };
       itemGroup?: { guid: string };
       displayName: string;
       quantity: number;
-      price: number;
+      price: number; // per-unit price (does NOT reflect quantity)
+      discountAmount?: number;
       modifiers?: Array<{
         guid: string;
         displayName: string;
@@ -40,6 +40,10 @@ interface ToastOrder {
     payments: Array<{
       type: string;
       amount: number;
+      tipAmount: number;
+    }>;
+    appliedDiscounts?: Array<{
+      discountAmount: number;
     }>;
   }>;
 }

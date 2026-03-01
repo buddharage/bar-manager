@@ -37,18 +37,31 @@ export async function syncOrdersForDate(
   }>();
 
   for (const order of orders) {
-    grossSales += order.totalAmount || 0;
-    taxAmount += order.taxAmount || 0;
-    tipAmount += order.tipAmount || 0;
-    discountAmount += order.discountAmount || 0;
-
     for (const check of order.checks || []) {
+      // Financial totals are on checks, not orders (Toast API structure)
+      const checkAmount = check.amount || 0; // subtotal after discounts, before tax
+      taxAmount += check.taxAmount || 0;
+
+      // Sum check-level discounts
+      for (const disc of check.appliedDiscounts || []) {
+        discountAmount += disc.discountAmount || 0;
+      }
+
+      // Tips and payment breakdown are on payments
       for (const payment of check.payments || []) {
+        tipAmount += payment.tipAmount || 0;
         paymentBreakdown[payment.type] =
           (paymentBreakdown[payment.type] || 0) + payment.amount;
       }
 
+      // check.amount is post-discount; add back discounts from selections
+      // for the gross total, then accumulate the net (post-discount) amount
+      grossSales += checkAmount;
+
       for (const selection of check.selections || []) {
+        // Accumulate item-level discounts (separate from check-level)
+        discountAmount += selection.discountAmount || 0;
+
         const itemGuid = selection.item?.guid || null;
         const category = itemGuid ? (categoryMap.get(itemGuid) || null) : null;
 
@@ -60,6 +73,7 @@ export async function syncOrdersForDate(
           }
         }
 
+        const qty = selection.quantity || 1;
         const key = `${selection.displayName}||${category}||${size}`;
         const existing = orderItemsMap.get(key) || {
           name: selection.displayName,
@@ -69,19 +83,22 @@ export async function syncOrdersForDate(
           size,
           menu_item_guid: itemGuid,
         };
-        existing.quantity += selection.quantity || 1;
-        existing.revenue += selection.price || 0;
+        existing.quantity += qty;
+        // selection.price is per-unit in Toast API — multiply by quantity
+        existing.revenue += (selection.price || 0) * qty;
         orderItemsMap.set(key, existing);
       }
     }
   }
 
   // Upsert daily sales
+  // grossSales = sum of check.amount (post-discount, pre-tax subtotal)
+  // To get a pre-discount gross, add discounts back
   const { error: salesError } = await supabase.from("daily_sales").upsert(
     {
       date: dateStr,
-      gross_sales: grossSales,
-      net_sales: grossSales - discountAmount,
+      gross_sales: grossSales + discountAmount,
+      net_sales: grossSales,
       tax_collected: taxAmount,
       tips: tipAmount,
       discounts: discountAmount,

@@ -16,10 +16,13 @@ function formatDate(dateStr: string): string {
 }
 
 function daysAgoLabel(dateStr: string): string {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(dateStr + "T00:00:00");
-  const diff = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+  // Use restaurant timezone so labels are correct even when server is in UTC
+  const todayStr = getLocalDateStr(RESTAURANT_TIMEZONE, 0);
+  const [ty, tm, td] = todayStr.split("-").map(Number);
+  const [dy, dm, dd] = dateStr.split("-").map(Number);
+  const todayMs = Date.UTC(ty, tm - 1, td);
+  const dateMs = Date.UTC(dy, dm - 1, dd);
+  const diff = Math.round((todayMs - dateMs) / (1000 * 60 * 60 * 24));
   if (diff === 0) return "Today";
   if (diff === 1) return "Yesterday";
   return `${diff} days ago`;
