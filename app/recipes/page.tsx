@@ -43,6 +43,9 @@ export default async function RecipesPage() {
     notes: string | null;
     image_url: string | null;
     instructions: string | null;
+    on_menu: boolean;
+    creator: string | null;
+    created_at_label: string | null;
     last_synced_at: string | null;
     recipe_ingredients: Array<{
       id: number;
