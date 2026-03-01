@@ -11,8 +11,8 @@ export async function syncOrdersForDate(
   categoryMap: Map<string, string>,
   sizeGroupGuids: Set<string>,
 ): Promise<{ records: number; ordersProcessed: number }> {
-  const startOfDay = `${dateStr}T00:00:00.000Z`;
-  const endOfDay = `${dateStr}T23:59:59.999Z`;
+  const startOfDay = `${dateStr}T00:00:00.000`;
+  const endOfDay = `${dateStr}T23:59:59.999`;
 
   const orders = await fetchOrders(startOfDay, endOfDay);
 
