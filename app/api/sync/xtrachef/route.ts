@@ -19,15 +19,18 @@ export async function POST(request: NextRequest) {
   const supabase = createServerClient();
 
   // Load xtraCHEF auth token from settings
-  const { data: tokenSetting } = await supabase
+  const { data: tokenSetting, error: tokenError } = await supabase
     .from("settings")
     .select("value")
     .eq("key", "xtrachef_token")
     .single();
 
-  if (!tokenSetting?.value) {
+  if (tokenError || !tokenSetting?.value) {
     return NextResponse.json(
-      { error: "xtraCHEF Bearer token not configured. Paste it in Settings." },
+      {
+        error: "xtraCHEF Bearer token not configured. Paste it in Settings.",
+        ...(tokenError ? { details: tokenError.message } : {}),
+      },
       { status: 400 },
     );
   }
