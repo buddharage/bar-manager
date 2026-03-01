@@ -13,16 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-type DatePreset =
-  | "today"
-  | "yesterday"
-  | "past_week"
-  | "past_month"
-  | "last_year"
-  | "this_year"
-  | "all_time"
-  | "custom";
+import { type DatePreset, getDateRange } from "@/lib/menu-sales/date-filters";
 
 type SortField = "name" | "quantity" | "revenue";
 type SortDirection = "asc" | "desc";
@@ -56,41 +47,6 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-function getDateRange(preset: DatePreset): { start: string; end: string } | null {
-  const today = new Date();
-  const fmt = (d: Date) => d.toISOString().split("T")[0];
-
-  switch (preset) {
-    case "today":
-      return { start: fmt(today), end: fmt(today) };
-    case "yesterday": {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return { start: fmt(y), end: fmt(y) };
-    }
-    case "past_week": {
-      const w = new Date(today);
-      w.setDate(w.getDate() - 7);
-      return { start: fmt(w), end: fmt(today) };
-    }
-    case "past_month": {
-      const m = new Date(today);
-      m.setMonth(m.getMonth() - 1);
-      return { start: fmt(m), end: fmt(today) };
-    }
-    case "last_year": {
-      const ly = today.getFullYear() - 1;
-      return { start: `${ly}-01-01`, end: `${ly}-12-31` };
-    }
-    case "this_year": {
-      return { start: `${today.getFullYear()}-01-01`, end: fmt(today) };
-    }
-    case "all_time":
-      return null;
-    case "custom":
-      return null;
-  }
-}
 
 const presets: { key: DatePreset; label: string }[] = [
   { key: "today", label: "Today" },
