@@ -159,10 +159,13 @@ export class XtrachefClient {
       : `Bearer ${this.token}`;
 
     const res = await fetch(url, {
+      method: "POST",
       headers: {
         authorization: bearer,
         accept: "application/json",
+        "content-type": "application/json",
       },
+      body: "{}",
     });
 
     if (!res.ok) {
