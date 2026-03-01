@@ -41,6 +41,7 @@ The app will not work until the database tables are created. Run each migration 
 3. `supabase/migrations/003_vector_embeddings.sql` — Vector embeddings for document search
 4. `supabase/migrations/003_order_items_category_size.sql` — Order items category/size fields
 5. `supabase/migrations/004_recipes.sql` — xtraCHEF recipes, recipe ingredients, and raw ingredients
+6. `supabase/migrations/005_inventory_rework.sql` — Ingredient-based inventory tracking, count history, unit conversions
 
 For each file: copy the full contents, paste into the SQL Editor, and click **Run**. You must run them in order because later migrations may depend on earlier ones.
 
@@ -125,9 +126,39 @@ The cron schedule:
 
 You can also trigger all syncs manually from the GitHub Actions tab or from the **Settings** page in the app (no secret prompt needed — uses your login session).
 
-### 7. Set inventory par levels
+### 7. Set up inventory tracking
 
-After the first Toast sync populates your inventory, set `par_level` for items you want to track. Do this in Supabase's table editor on the `inventory_items` table. Once set, the daily sync will automatically generate low-stock alerts and the AI can suggest reorder quantities.
+Inventory is tracked at the **ingredient level** using data from xtraCHEF recipes. After syncing recipes (step 8), all raw ingredients appear on the **Inventory** page.
+
+#### Configure ingredients
+
+For each ingredient you want to track:
+
+1. Click the **gear icon** to open settings
+2. Set the **base unit** (e.g. ml, oz, each, g)
+3. Set a **par level** — the minimum quantity you want on hand
+4. Optionally set a **purchase unit conversion** (e.g. 1 bottle = 750 ml, 1 case = 200 each)
+
+#### Manual counts
+
+Click **Count** on any ingredient to record a physical count. You can enter quantities in:
+- Base units (e.g. `500` for 500 ml)
+- Purchase units (e.g. `2 bottles` — auto-converts to 1500 ml if 1 bottle = 750 ml)
+- Other compatible units (e.g. `16 oz` when the base unit is ml — auto-converts)
+
+Each count is saved in history with a timestamp and optional note.
+
+#### Expected inventory
+
+After each Toast sync, the app automatically calculates **expected inventory** for every counted ingredient:
+
+1. Starts from the last manual count quantity
+2. Looks at all menu items sold (from `order_items`) since the count date
+3. Matches each menu item to its xtraCHEF recipe via Toast menu item GUID
+4. Calculates total ingredient usage per serving (handles prep recipe expansion and unit conversions)
+5. Subtracts usage from the count to get expected remaining stock
+
+When expected inventory drops below par level, the row is highlighted red and an alert is created on the **Alerts** page.
 
 ### 8. Sync xtraCHEF recipes (optional)
 
@@ -158,7 +189,7 @@ Imports recipes, prep recipes, and ingredients from xtraCHEF (Toast's recipe man
 
 | Phase | Status | Scope |
 |-------|--------|-------|
-| **1 — Inventory + Toast** | Done | Dashboard, inventory tracking, low-stock alerts, AI reorder suggestions, daily sync, xtraCHEF recipe sync |
+| **1 — Inventory + Toast** | Done | Dashboard, ingredient-based inventory with expected usage tracking, par levels, unit conversions, count history, low-stock alerts, AI reorder suggestions, daily sync, xtraCHEF recipe sync |
 | **2 — QBO + Sales Tax** | Stubbed | QuickBooks journal entries, NYC ST-100 tax worksheet, monthly filing reminders |
 | **3 — Sling + Payroll** | Stubbed | AI scheduling, time entry tracking, payroll pre-fill |
 | **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling |
@@ -170,8 +201,8 @@ Imports recipes, prep recipes, and ingredients from xtraCHEF (Toast's recipe man
 app/
   login/                  Password login page
   dashboard/              Sales KPIs + active alerts overview
-  inventory/              Inventory list with stock status
-  inventory/alerts/       Low-stock alerts + AI reorder suggestions
+  inventory/              Ingredient inventory: counts, expected usage, par levels, unit conversions
+  inventory/alerts/       Low-stock alerts + AI reorder suggestions (ingredient + Toast stock)
   recipes/                Recipes + prep recipes from xtraCHEF
   chat/                   Conversational AI interface
   settings/               Integration status, Google connect, xtraCHEF token, sync history
@@ -186,6 +217,7 @@ app/
     sync/google/          Google Drive sync endpoint
     sync/gmail/           Gmail sync endpoint
     sync/xtrachef/        xtraCHEF recipe sync endpoint
+    inventory/            Inventory CRUD, manual counts, expected recalculation
     webhooks/toast/       Real-time Toast stock webhook
     ai/chat/              Gemini chat endpoint
     ai/reorder/           AI reorder suggestions endpoint
@@ -193,7 +225,9 @@ app/
 lib/
   auth/                   Session token (HMAC-SHA256) + request verification
   integrations/           Toast, Google, xtraCHEF, QBO, Sling API clients
+  inventory/              Expected inventory calculation engine
   sync/                   Shared sync logic (xtraCHEF recipes)
+  units.ts                Unit conversion (ml/oz/volume/weight + purchase units)
   ai/                     Gemini Flash agent with tool-calling
   tax/                    NYC sales tax calculator
   supabase/               DB clients and TypeScript types

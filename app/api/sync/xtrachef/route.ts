@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { verifyRequest } from "@/lib/auth/session";
 import { XtrachefClient } from "@/lib/integrations/xtrachef-client";
 import { syncXtrachefRecipes } from "@/lib/sync/xtrachef-recipes";
+import { recalculateExpectedInventory } from "@/lib/inventory/expected";
 
 /**
  * POST /api/sync/xtrachef
@@ -82,11 +83,16 @@ export async function POST(request: NextRequest) {
         .eq("id", syncLog.id);
     }
 
+    // Recalculate expected inventory since recipe specs may have changed
+    const expectedResult = await recalculateExpectedInventory(supabase);
+
     return NextResponse.json({
       success: true,
       recipes_synced: result.recipesUpserted,
       ingredient_lines: result.ingredientLinesInserted,
       raw_ingredients: result.rawIngredientsUpserted,
+      expected_inventory_updated: expectedResult.updated,
+      ingredient_alerts_created: expectedResult.alerts,
       errors: result.errors,
     });
   } catch (error) {

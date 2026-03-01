@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchInventory, fetchAllMenuLookups } from "@/lib/integrations/toast-client";
 import { verifyRequest } from "@/lib/auth/session";
 import { syncOrdersForDate } from "@/lib/sync/toast-orders";
+import { recalculateExpectedInventory } from "@/lib/inventory/expected";
 
 // Daily Toast sync — called by GitHub Actions cron or manual trigger
 export async function POST(request: NextRequest) {
@@ -111,6 +112,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 4. Recalculate expected inventory from ingredient-based system
+    const expectedResult = await recalculateExpectedInventory(supabase);
+
     // Update sync log
     if (syncLog) {
       await supabase
@@ -127,6 +131,8 @@ export async function POST(request: NextRequest) {
       success: true,
       records_synced: totalRecords,
       orders_processed: ordersProcessed,
+      expected_inventory_updated: expectedResult.updated,
+      ingredient_alerts_created: expectedResult.alerts,
     });
   } catch (error) {
     // Log error

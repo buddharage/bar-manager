@@ -14,7 +14,8 @@ export interface InventoryItem {
 
 export interface InventoryAlert {
   id: number;
-  item_id: number;
+  item_id: number | null;
+  ingredient_id: number | null;
   alert_type: "low_stock" | "out_of_stock" | "overstock";
   threshold: number | null;
   message: string | null;
@@ -23,6 +24,35 @@ export interface InventoryAlert {
   resolved_at: string | null;
   // Joined fields
   inventory_items?: Pick<InventoryItem, "name" | "category" | "current_stock" | "par_level" | "unit">;
+  ingredients?: Pick<Ingredient, "name" | "category" | "unit" | "current_quantity" | "par_level" | "expected_quantity">;
+}
+
+export interface Ingredient {
+  id: number;
+  name: string;
+  category: string | null;
+  unit: string | null;
+  cost_per_unit: number | null;
+  inventory_item_id: number | null;
+  current_quantity: number;
+  par_level: number | null;
+  expected_quantity: number | null;
+  purchase_unit: string | null;
+  purchase_unit_quantity: number | null;
+  last_counted_at: string | null;
+  last_counted_quantity: number;
+  last_synced_at: string | null;
+  created_at: string;
+}
+
+export interface InventoryCount {
+  id: number;
+  ingredient_id: number;
+  quantity: number;
+  quantity_raw: string | null;
+  note: string | null;
+  counted_at: string;
+  created_at: string;
 }
 
 export interface DailySales {
@@ -116,6 +146,8 @@ export interface Document {
 export interface Database {
   inventory_items: InventoryItem;
   inventory_alerts: InventoryAlert;
+  ingredients: Ingredient;
+  inventory_counts: InventoryCount;
   daily_sales: DailySales;
   order_items: OrderItem;
   tax_periods: TaxPeriod;
