@@ -7,35 +7,6 @@ function local(year: number, month: number, day: number, hour = 12): Date {
 }
 
 describe("getDateRange", () => {
-  // ─── "today" ──────────────────────────────────────────────────────
-  describe("today", () => {
-    it("returns the current local date for both start and end", () => {
-      const now = local(2026, 3, 1);
-      expect(getDateRange("today", now)).toEqual({
-        start: "2026-03-01",
-        end: "2026-03-01",
-      });
-    });
-
-    it("is correct at the very start of a day (midnight)", () => {
-      const now = local(2026, 3, 1, 0);
-      expect(getDateRange("today", now)).toEqual({
-        start: "2026-03-01",
-        end: "2026-03-01",
-      });
-    });
-
-    it("is correct late at night (11pm) — the old UTC bug would shift the date forward", () => {
-      // 11pm local in a US timezone is already the next day in UTC.
-      // The old toISOString() approach would return the wrong date here.
-      const now = new Date(2026, 2, 1, 23, 30, 0); // March 1 at 11:30pm local
-      expect(getDateRange("today", now)).toEqual({
-        start: "2026-03-01",
-        end: "2026-03-01",
-      });
-    });
-  });
-
   // ─── "yesterday" ──────────────────────────────────────────────────
   describe("yesterday", () => {
     it("returns the previous day", () => {
@@ -263,15 +234,6 @@ describe("getDateRange", () => {
 
   // ─── Regression tests for the original UTC bug ────────────────────
   describe("UTC regression", () => {
-    it("today filter late at night does NOT return tomorrow's date", () => {
-      // In EST (UTC-5), 11pm on March 1 = 4am March 2 in UTC.
-      // The old toISOString() code would return "2026-03-02" here.
-      const now = new Date(2026, 2, 1, 23, 0, 0);
-      const result = getDateRange("today", now)!;
-      expect(result.start).toBe("2026-03-01");
-      expect(result.end).toBe("2026-03-01");
-    });
-
     it("yesterday filter late at night does NOT return today's date", () => {
       // The old code: today in UTC is March 2, yesterday in UTC is March 1.
       // But the user's local date is still March 1, so yesterday should be Feb 28.
@@ -299,13 +261,13 @@ describe("getDateRange", () => {
   describe("date formatting", () => {
     it("zero-pads single-digit months", () => {
       const now = local(2026, 1, 15);
-      const result = getDateRange("today", now)!;
-      expect(result.start).toBe("2026-01-15");
+      const result = getDateRange("yesterday", now)!;
+      expect(result.start).toBe("2026-01-14");
     });
 
     it("zero-pads single-digit days", () => {
-      const now = local(2026, 3, 5);
-      const result = getDateRange("today", now)!;
+      const now = local(2026, 3, 6);
+      const result = getDateRange("yesterday", now)!;
       expect(result.start).toBe("2026-03-05");
     });
   });

@@ -49,7 +49,6 @@ function formatCurrency(amount: number): string {
 
 
 const presets: { key: DatePreset; label: string }[] = [
-  { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
   { key: "past_week", label: "Past Week" },
   { key: "past_month", label: "Past Month" },
@@ -71,13 +70,16 @@ function SortIndicator({ field, sortField, sortDirection }: { field: SortField; 
 }
 
 export default function MenuSalesPage() {
-  const [activePreset, setActivePreset] = useState<DatePreset>("past_week");
+  const [activePreset, setActivePreset] = useState<DatePreset>("yesterday");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [items, setItems] = useState<MenuSaleItem[]>([]);
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataIngestedAt, setDataIngestedAt] = useState<string | null>(null);
+  const [earliestDataDate, setEarliestDataDate] = useState<string | null>(null);
+  const [latestDataDate, setLatestDataDate] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("quantity");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
@@ -110,10 +112,16 @@ export default function MenuSalesPage() {
         const data = await res.json();
         setItems(data.items);
         setSummary(data.summary);
+        setDataIngestedAt(data.dataIngestedAt ?? null);
+        setEarliestDataDate(data.earliestDataDate ?? null);
+        setLatestDataDate(data.latestDataDate ?? null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
         setItems([]);
         setSummary(null);
+        setDataIngestedAt(null);
+        setEarliestDataDate(null);
+        setLatestDataDate(null);
       } finally {
         setLoading(false);
       }
@@ -228,6 +236,21 @@ export default function MenuSalesPage() {
             Apply
           </Button>
         </div>
+      )}
+
+      {/* Data coverage info */}
+      {(earliestDataDate || dataIngestedAt) && (
+        <p className="text-sm text-muted-foreground">
+          {earliestDataDate && latestDataDate && (
+            <>
+              Data available: {earliestDataDate} to {latestDataDate}
+            </>
+          )}
+          {earliestDataDate && dataIngestedAt && " · "}
+          {dataIngestedAt && (
+            <>First ingested: {new Date(dataIngestedAt).toLocaleString()}</>
+          )}
+        </p>
       )}
 
       {/* Error state */}

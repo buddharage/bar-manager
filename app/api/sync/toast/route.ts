@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { fetchOrders, fetchInventory, fetchMenuItems, fetchMenuItemCategoryMap, fetchSizeOptionGroupGuids } from "@/lib/integrations/toast-client";
+import { fetchInventory, fetchMenuItems } from "@/lib/integrations/toast-client";
 import { verifyRequest } from "@/lib/auth/session";
+import { syncOrdersForDate, fetchSharedLookups } from "@/lib/sync/toast-orders";
 
 // Daily Toast sync — called by GitHub Actions cron or manual trigger
 export async function POST(request: NextRequest) {
@@ -26,11 +27,10 @@ export async function POST(request: NextRequest) {
     let totalRecords = 0;
 
     // 1. Sync inventory stock levels (enriched with menu item names)
-    const [stockItems, menuItems, categoryMap, sizeGroupGuids] = await Promise.all([
+    const [stockItems, menuItems, { categoryMap, sizeGroupGuids }] = await Promise.all([
       fetchInventory(),
       fetchMenuItems(),
-      fetchMenuItemCategoryMap(),
-      fetchSizeOptionGroupGuids(),
+      fetchSharedLookups(),
     ]);
 
     // Build a GUID→name lookup from menu data
@@ -59,101 +59,14 @@ export async function POST(request: NextRequest) {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split("T")[0];
-    const startOfDay = `${dateStr}T00:00:00.000Z`;
-    const endOfDay = `${dateStr}T23:59:59.999Z`;
 
-    const orders = await fetchOrders(startOfDay, endOfDay);
-
-    // Aggregate daily sales
-    let grossSales = 0;
-    let taxAmount = 0;
-    let tipAmount = 0;
-    let discountAmount = 0;
-    const paymentBreakdown: Record<string, number> = {};
-    const orderItemsMap = new Map<string, {
-      name: string;
-      quantity: number;
-      revenue: number;
-      category: string | null;
-      size: string | null;
-      menu_item_guid: string | null;
-    }>();
-
-    for (const order of orders) {
-      grossSales += order.totalAmount || 0;
-      taxAmount += order.taxAmount || 0;
-      tipAmount += order.tipAmount || 0;
-      discountAmount += order.discountAmount || 0;
-
-      for (const check of order.checks || []) {
-        // Aggregate payment types
-        for (const payment of check.payments || []) {
-          paymentBreakdown[payment.type] =
-            (paymentBreakdown[payment.type] || 0) + payment.amount;
-        }
-
-        // Aggregate order items — keyed by (name, category, size)
-        for (const selection of check.selections || []) {
-          const itemGuid = selection.item?.guid || null;
-          const category = itemGuid ? (categoryMap.get(itemGuid) || null) : null;
-
-          // Extract size from modifiers: find the first modifier whose
-          // optionGroup is a known size group (identified from the menus API).
-          let size: string | null = null;
-          for (const mod of selection.modifiers || []) {
-            if (mod.optionGroup?.guid && sizeGroupGuids.has(mod.optionGroup.guid)) {
-              size = mod.displayName;
-              break;
-            }
-          }
-
-          const key = `${selection.displayName}||${category}||${size}`;
-          const existing = orderItemsMap.get(key) || {
-            name: selection.displayName,
-            quantity: 0,
-            revenue: 0,
-            category,
-            size,
-            menu_item_guid: itemGuid,
-          };
-          existing.quantity += selection.quantity || 1;
-          existing.revenue += selection.price || 0;
-          orderItemsMap.set(key, existing);
-        }
-      }
-    }
-
-    // Upsert daily sales
-    await supabase.from("daily_sales").upsert(
-      {
-        date: dateStr,
-        gross_sales: grossSales,
-        net_sales: grossSales - discountAmount,
-        tax_collected: taxAmount,
-        tips: tipAmount,
-        discounts: discountAmount,
-        payment_breakdown: paymentBreakdown,
-      },
-      { onConflict: "date" }
+    const { records: orderRecords, ordersProcessed } = await syncOrdersForDate(
+      supabase,
+      dateStr,
+      categoryMap,
+      sizeGroupGuids,
     );
-    totalRecords++;
-
-    // Insert order items (clear previous entries for this date to avoid duplicates on re-run)
-    const orderItemRows = Array.from(orderItemsMap.values()).map((item) => ({
-      date: dateStr,
-      menu_item_guid: item.menu_item_guid,
-      name: item.name,
-      quantity: item.quantity,
-      revenue: item.revenue,
-      category: item.category,
-      size: item.size,
-    }));
-
-    if (orderItemRows.length > 0) {
-      await supabase.from("order_items").delete().eq("date", dateStr);
-      await supabase.from("order_items").insert(orderItemRows);
-      totalRecords += orderItemRows.length;
-    }
+    totalRecords += orderRecords;
 
     // 3. Generate low-stock alerts
     const { data: lowStockItems } = await supabase
@@ -207,7 +120,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       records_synced: totalRecords,
-      orders_processed: orders.length,
+      orders_processed: ordersProcessed,
     });
   } catch (error) {
     // Log error
