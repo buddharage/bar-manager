@@ -14,6 +14,7 @@ import { verifyToken } from "@/lib/auth/session";
 // (e.g. "High Life" → "Miller High Life").
 const BEER_ALIASES: Record<string, string> = {
   "high life": "Miller High Life",
+  "miller high life": "Miller High Life",
 };
 
 function normalizeItemName(name: string, category?: string): string {
@@ -22,14 +23,24 @@ function normalizeItemName(name: string, category?: string): string {
   let normalized = name.replace(/\s*\(Happy Hour\)\s*$/i, "").trim();
 
   const lowerCat = category?.toLowerCase();
+  const isBeerOrWine = lowerCat?.includes("wine") || lowerCat?.includes("beer");
 
-  if (lowerCat?.includes("wine") || lowerCat?.includes("beer")) {
-    normalized = normalized
-      .replace(/\s+and\s+(a\s+)?Shot\s*$/i, "")
-      .replace(/\s*&\s*Shot\s*$/i, "")
-      .trim();
+  // Tentatively strip shot suffixes to check against known beer names.
+  const withoutShot = normalized
+    .replace(/\s+and\s+(a\s+)?Shot\s*$/i, "")
+    .replace(/\s*&\s*Shot\s*$/i, "")
+    .trim();
 
+  if (isBeerOrWine) {
+    // Beer/wine category — always strip shot suffixes and apply aliases.
+    normalized = withoutShot;
     const alias = BEER_ALIASES[normalized.toLowerCase()];
+    if (alias) normalized = alias;
+  } else {
+    // Outside beer/wine categories, items like "High Life and Shot" may be
+    // categorised under "Shots" or similar. Strip the shot suffix and check
+    // if the result matches a known beer alias — only then apply it.
+    const alias = BEER_ALIASES[withoutShot.toLowerCase()];
     if (alias) normalized = alias;
   }
 
