@@ -41,13 +41,14 @@ export default async function DashboardPage() {
     ingredientsSummaryResult,
     topItemsResult,
   ] = await Promise.all([
-    // Most recent sales day (fixes the "always empty" bug)
+    // Most recent sales day — use maybeSingle() so "no rows" returns null
+    // without an error (unlike single() which errors on 0 rows).
     supabase
       .from("daily_sales")
       .select("*")
       .order("date", { ascending: false })
       .limit(1)
-      .single(),
+      .maybeSingle(),
     // Last 7 days for trend
     supabase
       .from("daily_sales")
@@ -68,7 +69,7 @@ export default async function DashboardPage() {
       .eq("source", "toast")
       .order("started_at", { ascending: false })
       .limit(1)
-      .single(),
+      .maybeSingle(),
     // Inventory summary: count ingredients, count below par
     supabase
       .from("ingredients")
@@ -81,6 +82,33 @@ export default async function DashboardPage() {
       .order("quantity", { ascending: false })
       .limit(50),
   ]);
+
+  // Collect query errors so we can surface them in the UI.
+  const queryErrors: string[] = [];
+  if (latestSalesResult.error) {
+    console.error("Dashboard: daily_sales query failed:", latestSalesResult.error);
+    queryErrors.push(`Sales: ${latestSalesResult.error.message}`);
+  }
+  if (recentSalesResult.error) {
+    console.error("Dashboard: recent sales query failed:", recentSalesResult.error);
+    queryErrors.push(`7-day trend: ${recentSalesResult.error.message}`);
+  }
+  if (alertsResult.error) {
+    console.error("Dashboard: alerts query failed:", alertsResult.error);
+    queryErrors.push(`Alerts: ${alertsResult.error.message}`);
+  }
+  if (syncResult.error) {
+    console.error("Dashboard: sync_logs query failed:", syncResult.error);
+    queryErrors.push(`Sync log: ${syncResult.error.message}`);
+  }
+  if (ingredientsSummaryResult.error) {
+    console.error("Dashboard: ingredients query failed:", ingredientsSummaryResult.error);
+    queryErrors.push(`Ingredients: ${ingredientsSummaryResult.error.message}`);
+  }
+  if (topItemsResult.error) {
+    console.error("Dashboard: order_items query failed:", topItemsResult.error);
+    queryErrors.push(`Top items: ${topItemsResult.error.message}`);
+  }
 
   const latestSales = latestSalesResult.data;
   const recentSales = recentSalesResult.data || [];
@@ -136,8 +164,29 @@ export default async function DashboardPage() {
         )}
       </div>
 
+      {/* Database query errors — show so the user can diagnose */}
+      {queryErrors.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-destructive">
+              Failed to load dashboard data
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc pl-4 text-sm text-muted-foreground space-y-1">
+              {queryErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Check that the Supabase environment variables are configured and the database migrations have been applied.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* No data at all — guide the user */}
-      {!hasAnySalesData && !hasAnyInventoryData && !lastSync && (
+      {!hasAnySalesData && !hasAnyInventoryData && !lastSync && queryErrors.length === 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Welcome to Bar Manager</CardTitle>
