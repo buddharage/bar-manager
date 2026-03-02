@@ -54,6 +54,8 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -71,6 +73,26 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
+
+  const triggerSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch("/api/dashboard", { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) {
+        setSyncMessage(`Sync failed: ${body.error}`);
+      } else {
+        setSyncMessage(`Synced ${body.total_orders} orders across ${body.days_synced.length} days`);
+        // Refresh dashboard data
+        await fetchDashboard();
+      }
+    } catch (err) {
+      setSyncMessage(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [fetchDashboard]);
 
   useEffect(() => {
     fetchDashboard();
@@ -141,6 +163,13 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">Loading dashboard...</p>
       )}
 
+      {/* Sync status message */}
+      {syncMessage && (
+        <p className={`text-sm ${syncMessage.startsWith("Sync failed") ? "text-destructive" : "text-muted-foreground"}`}>
+          {syncMessage}
+        </p>
+      )}
+
       {/* Fatal error fetching data */}
       {error && (
         <Card>
@@ -154,6 +183,9 @@ export default function DashboardPage() {
             <p className="mt-2 text-xs text-muted-foreground">
               Check that the Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are configured and the database migrations have been applied.
             </p>
+            <Button className="mt-3" size="sm" onClick={triggerSync} disabled={syncing}>
+              {syncing ? "Syncing..." : "Sync Toast Data (Last 7 Days)"}
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -185,16 +217,38 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Welcome to Bar Manager</CardTitle>
             <CardDescription>
-              No data has been synced yet. Connect your Toast account and run your first sync to populate the dashboard.
+              No data has been synced yet. Click below to pull the last 7 days of sales from Toast, or go to Settings to configure your account.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex gap-3">
+            <Button onClick={triggerSync} disabled={syncing}>
+              {syncing ? "Syncing Toast data..." : "Sync Toast Data (Last 7 Days)"}
+            </Button>
             <Link
               href="/settings"
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
             >
               Go to Settings
             </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Has sync logs but no sales — sync ran but produced no data */}
+      {!loading && !error && !hasAnySalesData && lastSync && queryErrors.length === 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">No Sales Data</CardTitle>
+            <CardDescription>
+              {lastSync.status === "error"
+                ? "The last Toast sync failed. Try syncing again, or check the Toast API credentials in Settings."
+                : "A sync has run but no sales data was found. Try syncing the last 7 days to backfill historical data."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button size="sm" onClick={triggerSync} disabled={syncing}>
+              {syncing ? "Syncing Toast data..." : "Sync Last 7 Days"}
+            </Button>
           </CardContent>
         </Card>
       )}

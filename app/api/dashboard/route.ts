@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { verifyToken } from "@/lib/auth/session";
 import { getLocalDateStr, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
+import { fetchAllMenuLookups } from "@/lib/integrations/toast-client";
+import { syncOrdersForDate } from "@/lib/sync/toast-orders";
 
 export async function GET(request: NextRequest) {
   // Verify session
@@ -93,6 +95,82 @@ export async function GET(request: NextRequest) {
     console.error("Dashboard API error:", err);
     return NextResponse.json(
       { error: `Dashboard data fetch failed: ${err instanceof Error ? err.message : String(err)}` },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/dashboard — trigger a Toast sync + backfill from the dashboard.
+ * Syncs the last 7 days of order data so the dashboard has something to show.
+ */
+export async function POST(request: NextRequest) {
+  const token = request.cookies.get("session")?.value;
+  if (!token || !(await verifyToken(token))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "Supabase environment variables are not configured" },
+      { status: 500 }
+    );
+  }
+
+  try {
+    const supabase = createServerClient();
+
+    // Create sync log
+    const { data: syncLog } = await supabase
+      .from("sync_logs")
+      .insert({ source: "toast", status: "started" })
+      .select()
+      .single();
+
+    // Fetch menu lookups once
+    const { categoryMap, sizeGroupGuids } = await fetchAllMenuLookups();
+
+    // Sync last 7 days (yesterday through 7 days ago)
+    let totalRecords = 0;
+    let totalOrders = 0;
+    const days: string[] = [];
+
+    for (let i = 1; i <= 7; i++) {
+      const dateStr = getLocalDateStr(RESTAURANT_TIMEZONE, -i);
+      days.push(dateStr);
+      const { records, ordersProcessed } = await syncOrdersForDate(
+        supabase,
+        dateStr,
+        categoryMap,
+        sizeGroupGuids,
+        RESTAURANT_TIMEZONE,
+      );
+      totalRecords += records;
+      totalOrders += ordersProcessed;
+    }
+
+    // Update sync log
+    if (syncLog) {
+      await supabase
+        .from("sync_logs")
+        .update({
+          status: "success",
+          records_synced: totalRecords,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", syncLog.id);
+    }
+
+    return NextResponse.json({
+      success: true,
+      days_synced: days,
+      total_records: totalRecords,
+      total_orders: totalOrders,
+    });
+  } catch (err) {
+    console.error("Dashboard sync error:", err);
+    return NextResponse.json(
+      { error: `Sync failed: ${err instanceof Error ? err.message : String(err)}` },
       { status: 500 }
     );
   }
