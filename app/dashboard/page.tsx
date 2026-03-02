@@ -1,10 +1,10 @@
-import { createServerClient } from "@/lib/supabase/server";
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { getLocalDateStr, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
-
-export const dynamic = "force-dynamic";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
@@ -25,125 +25,92 @@ function daysAgoLabel(dateStr: string): string {
   return `${diff} days ago`;
 }
 
-export default async function DashboardPage() {
-  const supabase = createServerClient();
+interface DashboardData {
+  latestSales: {
+    date: string;
+    net_sales: number;
+    tax_collected: number;
+    tips: number;
+    gross_sales: number;
+    discounts: number;
+  } | null;
+  recentSales: { date: string; net_sales: number; tax_collected: number; tips: number }[];
+  alerts: {
+    id: number;
+    alert_type: string;
+    message: string | null;
+    item_id: number | null;
+    ingredient_id: number | null;
+    inventory_items?: { name: string } | null;
+    ingredients?: { name: string } | null;
+  }[];
+  lastSync: { status: string; started_at: string } | null;
+  ingredients: { id: number; par_level: number | null; expected_quantity: number | null; last_counted_at: string | null }[];
+  topItems: { name: string; quantity: number; revenue: number }[];
+  queryErrors: string[];
+}
 
-  // Fetch most recent sales day, last 7 days of sales, alerts, inventory summary,
-  // top selling items, and latest sync — all in parallel.
-  // Use the restaurant's local timezone so date boundaries match the business day.
-  const sevenDaysAgoStr = getLocalDateStr(RESTAURANT_TIMEZONE, -7);
+export default function DashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [
-    latestSalesResult,
-    recentSalesResult,
-    alertsResult,
-    syncResult,
-    ingredientsSummaryResult,
-    topItemsResult,
-  ] = await Promise.all([
-    // Most recent sales day — use maybeSingle() so "no rows" returns null
-    // without an error (unlike single() which errors on 0 rows).
-    supabase
-      .from("daily_sales")
-      .select("*")
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    // Last 7 days for trend
-    supabase
-      .from("daily_sales")
-      .select("date, net_sales, tax_collected, tips")
-      .gte("date", sevenDaysAgoStr)
-      .order("date", { ascending: true }),
-    // Unresolved alerts
-    supabase
-      .from("inventory_alerts")
-      .select("*, inventory_items(name, category), ingredients(name, category)")
-      .eq("resolved", false)
-      .order("created_at", { ascending: false })
-      .limit(5),
-    // Latest sync
-    supabase
-      .from("sync_logs")
-      .select("*")
-      .eq("source", "toast")
-      .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    // Inventory summary: count ingredients, count below par
-    supabase
-      .from("ingredients")
-      .select("id, par_level, expected_quantity, last_counted_at"),
-    // Top selling items from last 7 days
-    supabase
-      .from("order_items")
-      .select("name, quantity, revenue")
-      .gte("date", sevenDaysAgoStr)
-      .order("quantity", { ascending: false })
-      .limit(50),
-  ]);
-
-  // Collect query errors so we can surface them in the UI.
-  const queryErrors: string[] = [];
-  if (latestSalesResult.error) {
-    console.error("Dashboard: daily_sales query failed:", latestSalesResult.error);
-    queryErrors.push(`Sales: ${latestSalesResult.error.message}`);
-  }
-  if (recentSalesResult.error) {
-    console.error("Dashboard: recent sales query failed:", recentSalesResult.error);
-    queryErrors.push(`7-day trend: ${recentSalesResult.error.message}`);
-  }
-  if (alertsResult.error) {
-    console.error("Dashboard: alerts query failed:", alertsResult.error);
-    queryErrors.push(`Alerts: ${alertsResult.error.message}`);
-  }
-  if (syncResult.error) {
-    console.error("Dashboard: sync_logs query failed:", syncResult.error);
-    queryErrors.push(`Sync log: ${syncResult.error.message}`);
-  }
-  if (ingredientsSummaryResult.error) {
-    console.error("Dashboard: ingredients query failed:", ingredientsSummaryResult.error);
-    queryErrors.push(`Ingredients: ${ingredientsSummaryResult.error.message}`);
-  }
-  if (topItemsResult.error) {
-    console.error("Dashboard: order_items query failed:", topItemsResult.error);
-    queryErrors.push(`Top items: ${topItemsResult.error.message}`);
-  }
-
-  const latestSales = latestSalesResult.data;
-  const recentSales = recentSalesResult.data || [];
-  const alerts = alertsResult.data || [];
-  const lastSync = syncResult.data;
-  const ingredients = ingredientsSummaryResult.data || [];
-  const rawTopItems = topItemsResult.data || [];
-
-  // Aggregate top items by name (order_items may have multiple rows per item across dates)
-  const topItemsMap = new Map<string, { name: string; quantity: number; revenue: number }>();
-  for (const item of rawTopItems) {
-    const existing = topItemsMap.get(item.name);
-    if (existing) {
-      existing.quantity += item.quantity;
-      existing.revenue += item.revenue;
-    } else {
-      topItemsMap.set(item.name, { name: item.name, quantity: item.quantity, revenue: item.revenue });
+  const fetchDashboard = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/dashboard");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(body.error || `Failed to load dashboard (${res.status})`);
+      }
+      setData(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
     }
-  }
-  const topItems = Array.from(topItemsMap.values())
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 5);
+  }, []);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  // Aggregate top items by name
+  const topItems = useMemo(() => {
+    if (!data) return [];
+    const map = new Map<string, { name: string; quantity: number; revenue: number }>();
+    for (const item of data.topItems) {
+      const existing = map.get(item.name);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.revenue += item.revenue;
+      } else {
+        map.set(item.name, { name: item.name, quantity: item.quantity, revenue: item.revenue });
+      }
+    }
+    return Array.from(map.values())
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5);
+  }, [data]);
 
   // Inventory stats
-  const totalIngredients = ingredients.length;
-  const countedIngredients = ingredients.filter((i) => i.last_counted_at).length;
-  const belowPar = ingredients.filter(
+  const totalIngredients = data?.ingredients.length ?? 0;
+  const countedIngredients = data?.ingredients.filter((i) => i.last_counted_at).length ?? 0;
+  const belowPar = data?.ingredients.filter(
     (i) => i.par_level != null && i.expected_quantity != null && i.expected_quantity <= i.par_level,
-  ).length;
+  ).length ?? 0;
 
   // 7-day trend stats
+  const recentSales = data?.recentSales ?? [];
   const weekNetSales = recentSales.reduce((sum, d) => sum + (d.net_sales || 0), 0);
   const weekTips = recentSales.reduce((sum, d) => sum + (d.tips || 0), 0);
   const maxDailySales = Math.max(...recentSales.map((d) => d.net_sales || 0), 1);
 
+  const latestSales = data?.latestSales ?? null;
+  const lastSync = data?.lastSync ?? null;
+  const alerts = data?.alerts ?? [];
+  const queryErrors = data?.queryErrors ?? [];
   const hasAnySalesData = latestSales != null;
   const hasAnyInventoryData = totalIngredients > 0;
   const hasAnyOrderData = topItems.length > 0;
@@ -153,23 +120,50 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        {lastSync && (
-          <div className="text-sm text-muted-foreground">
-            Last Toast sync:{" "}
-            <Badge variant={lastSync.status === "success" ? "default" : "destructive"}>
-              {lastSync.status}
-            </Badge>{" "}
-            {new Date(lastSync.started_at).toLocaleString()}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {lastSync && (
+            <div className="text-sm text-muted-foreground">
+              Last Toast sync:{" "}
+              <Badge variant={lastSync.status === "success" ? "default" : "destructive"}>
+                {lastSync.status}
+              </Badge>{" "}
+              {new Date(lastSync.started_at).toLocaleString()}
+            </div>
+          )}
+          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
+            {loading ? "Loading..." : "Refresh"}
+          </Button>
+        </div>
       </div>
 
-      {/* Database query errors — show so the user can diagnose */}
-      {queryErrors.length > 0 && (
+      {/* Loading state */}
+      {loading && !data && (
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      )}
+
+      {/* Fatal error fetching data */}
+      {error && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-destructive">
               Failed to load dashboard data
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Check that the Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are configured and the database migrations have been applied.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Database query errors — partial failures */}
+      {queryErrors.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-destructive">
+              Some dashboard queries failed
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -179,14 +173,14 @@ export default async function DashboardPage() {
               ))}
             </ul>
             <p className="mt-2 text-xs text-muted-foreground">
-              Check that the Supabase environment variables are configured and the database migrations have been applied.
+              Check that the database migrations have been applied.
             </p>
           </CardContent>
         </Card>
       )}
 
       {/* No data at all — guide the user */}
-      {!hasAnySalesData && !hasAnyInventoryData && !lastSync && queryErrors.length === 0 && (
+      {!loading && !error && !hasAnySalesData && !hasAnyInventoryData && !lastSync && queryErrors.length === 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Welcome to Bar Manager</CardTitle>
@@ -414,8 +408,8 @@ export default async function DashboardPage() {
               <div className="space-y-3">
                 {alerts.map((alert) => {
                   const itemName =
-                    (alert.ingredients as unknown as { name: string })?.name ||
-                    (alert.inventory_items as unknown as { name: string })?.name ||
+                    alert.ingredients?.name ||
+                    alert.inventory_items?.name ||
                     `Item #${alert.item_id || alert.ingredient_id}`;
                   return (
                     <div
