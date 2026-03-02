@@ -37,22 +37,25 @@ export async function syncOrdersForDate(
   }>();
 
   for (const order of orders) {
-    // Toast v2 API places amounts on each check, not on the order object.
-    // Read check-level totals; fall back to order-level fields for compat.
     for (const check of order.checks || []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const c = check as any;
-      grossSales += c.totalAmount || c.amount || 0;
+
+      // Tax & discounts from check level (if available)
       taxAmount += c.taxAmount || 0;
-      tipAmount += c.tipAmount || 0;
       discountAmount += c.appliedDiscountAmount || 0;
 
+      // Tips: Toast v2 puts tip amounts on each payment, not on the check.
       for (const payment of check.payments || []) {
+        tipAmount += payment.tipAmount || 0;
         paymentBreakdown[payment.type] =
           (paymentBreakdown[payment.type] || 0) + payment.amount;
       }
 
+      // Gross sales: derive from selection prices (proven reliable; check-level
+      // totalAmount/amount fields don't exist in Toast v2 ordersBulk responses).
       for (const selection of check.selections || []) {
+        grossSales += selection.price || 0;
         const itemGuid = selection.item?.guid || null;
         const category = itemGuid ? (categoryMap.get(itemGuid) || null) : null;
 

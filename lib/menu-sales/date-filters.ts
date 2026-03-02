@@ -9,11 +9,6 @@ export type DatePreset =
 
 /**
  * Format a Date as YYYY-MM-DD using **local** time components.
- *
- * The previous implementation used `toISOString().split("T")[0]` which converts
- * to UTC first. In any timezone west of UTC (e.g. US timezones), this shifts
- * the date forward — so "yesterday" could actually return today's UTC date, and
- * "today" could return tomorrow's UTC date.
  */
 function fmtLocal(d: Date): string {
   const year = d.getFullYear();
@@ -22,11 +17,28 @@ function fmtLocal(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Default restaurant timezone. Uses the same value as lib/sync/timezone.ts
+ * (duplicated here to avoid importing a server module into client code).
+ */
+const RESTAURANT_TZ = "America/New_York";
+
 export function getDateRange(
   preset: DatePreset,
-  now: Date = new Date()
+  now: Date = new Date(),
+  tz: string = RESTAURANT_TZ,
 ): { start: string; end: string } | null {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Determine "today" in the restaurant's timezone so that date presets
+  // (e.g. "yesterday") align with the restaurant's local calendar day,
+  // regardless of the browser or server timezone.
+  const todayStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const [ty, tm, td] = todayStr.split("-").map(Number);
+  const today = new Date(ty, tm - 1, td);
 
   switch (preset) {
     case "yesterday": {

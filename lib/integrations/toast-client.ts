@@ -16,11 +16,6 @@ interface ToastOrder {
   guid: string;
   openedDate: string;
   closedDate?: string;
-  totalAmount: number;
-  netAmount: number;
-  taxAmount: number;
-  tipAmount: number;
-  discountAmount: number;
   checks: Array<{
     selections: Array<{
       guid: string;
@@ -40,6 +35,7 @@ interface ToastOrder {
     payments: Array<{
       type: string;
       amount: number;
+      tipAmount?: number;
     }>;
   }>;
 }
