@@ -37,12 +37,16 @@ export async function syncOrdersForDate(
   }>();
 
   for (const order of orders) {
-    grossSales += order.totalAmount || 0;
-    taxAmount += order.taxAmount || 0;
-    tipAmount += order.tipAmount || 0;
-    discountAmount += order.discountAmount || 0;
-
+    // Toast v2 API places amounts on each check, not on the order object.
+    // Read check-level totals; fall back to order-level fields for compat.
     for (const check of order.checks || []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = check as any;
+      grossSales += c.totalAmount || c.amount || 0;
+      taxAmount += c.taxAmount || 0;
+      tipAmount += c.tipAmount || 0;
+      discountAmount += c.appliedDiscountAmount || 0;
+
       for (const payment of check.payments || []) {
         paymentBreakdown[payment.type] =
           (paymentBreakdown[payment.type] || 0) + payment.amount;
