@@ -83,24 +83,29 @@ export async function syncOrdersForDate(
     }
   }
 
-  // Upsert daily sales
-  const { error: salesError } = await supabase.from("daily_sales").upsert(
-    {
-      date: dateStr,
-      gross_sales: grossSales,
-      net_sales: grossSales - discountAmount,
-      tax_collected: taxAmount,
-      tips: tipAmount,
-      discounts: discountAmount,
-      payment_breakdown: paymentBreakdown,
-    },
-    { onConflict: "date" }
-  );
-  if (salesError) {
-    console.error(`Failed to upsert daily_sales for ${dateStr}:`, salesError);
-    throw new Error(`Failed to upsert daily sales for ${dateStr}: ${salesError.message}`);
+  // Only upsert daily sales when we actually have orders — writing a $0 row
+  // when the restaurant is closed would overwrite any previously-synced data
+  // and cause the dashboard "latest sales" card to show $0.
+  let records = 0;
+  if (orders.length > 0) {
+    const { error: salesError } = await supabase.from("daily_sales").upsert(
+      {
+        date: dateStr,
+        gross_sales: grossSales,
+        net_sales: grossSales - discountAmount,
+        tax_collected: taxAmount,
+        tips: tipAmount,
+        discounts: discountAmount,
+        payment_breakdown: paymentBreakdown,
+      },
+      { onConflict: "date" }
+    );
+    if (salesError) {
+      console.error(`Failed to upsert daily_sales for ${dateStr}:`, salesError);
+      throw new Error(`Failed to upsert daily sales for ${dateStr}: ${salesError.message}`);
+    }
+    records = 1;
   }
-  let records = 1;
 
   // Insert order items (clear previous entries to avoid duplicates on re-run)
   const orderItemRows = Array.from(orderItemsMap.values()).map((item) => ({

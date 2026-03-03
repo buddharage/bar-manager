@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
       supabase
         .from("daily_sales")
         .select("*")
+        .gt("gross_sales", 0)
         .order("date", { ascending: false })
         .limit(1)
         .maybeSingle(),
