@@ -23,9 +23,9 @@ export async function syncOrdersForDate(
   const orders = await fetchOrders(startOfDay, endOfDay);
 
   let grossSales = 0;
+  let netSales = 0;
   let taxAmount = 0;
   let tipAmount = 0;
-  let discountAmount = 0;
   const paymentBreakdown: Record<string, number> = {};
   const orderItemsMap = new Map<string, {
     name: string;
@@ -37,18 +37,35 @@ export async function syncOrdersForDate(
   }>();
 
   for (const order of orders) {
-    grossSales += order.totalAmount || 0;
-    taxAmount += order.taxAmount || 0;
-    tipAmount += order.tipAmount || 0;
-    discountAmount += order.discountAmount || 0;
+    // Skip voided/deleted orders entirely
+    if (order.voided || order.deleted) continue;
 
     for (const check of order.checks || []) {
+      // Skip voided/deleted checks
+      if (check.voided || check.deleted) continue;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = check as any;
+
+      // Tax from check level
+      taxAmount += c.taxAmount || 0;
+
+      // Tips: Toast v2 puts tip amounts on each payment, not on the check.
       for (const payment of check.payments || []) {
+        tipAmount += payment.tipAmount || 0;
         paymentBreakdown[payment.type] =
           (paymentBreakdown[payment.type] || 0) + payment.amount;
       }
 
+      // Sales from selections:
+      // - preDiscountPrice = gross (before discounts, includes qty × unit + modifiers)
+      // - price = net (after discounts, before tax)
       for (const selection of check.selections || []) {
+        if (selection.voided) continue;
+
+        grossSales += selection.preDiscountPrice || 0;
+        netSales += selection.price || 0;
+
         const itemGuid = selection.item?.guid || null;
         const category = itemGuid ? (categoryMap.get(itemGuid) || null) : null;
 
@@ -76,24 +93,30 @@ export async function syncOrdersForDate(
     }
   }
 
-  // Upsert daily sales
-  const { error: salesError } = await supabase.from("daily_sales").upsert(
-    {
-      date: dateStr,
-      gross_sales: grossSales,
-      net_sales: grossSales - discountAmount,
-      tax_collected: taxAmount,
-      tips: tipAmount,
-      discounts: discountAmount,
-      payment_breakdown: paymentBreakdown,
-    },
-    { onConflict: "date" }
-  );
-  if (salesError) {
-    console.error(`Failed to upsert daily_sales for ${dateStr}:`, salesError);
-    throw new Error(`Failed to upsert daily sales for ${dateStr}: ${salesError.message}`);
+  // Only upsert daily sales when we actually have orders — writing a $0 row
+  // when the restaurant is closed would overwrite any previously-synced data
+  // and cause the dashboard "latest sales" card to show $0.
+  let records = 0;
+  if (orders.length > 0) {
+    const discountAmount = grossSales - netSales;
+    const { error: salesError } = await supabase.from("daily_sales").upsert(
+      {
+        date: dateStr,
+        gross_sales: grossSales,
+        net_sales: netSales,
+        tax_collected: taxAmount,
+        tips: tipAmount,
+        discounts: discountAmount,
+        payment_breakdown: paymentBreakdown,
+      },
+      { onConflict: "date" }
+    );
+    if (salesError) {
+      console.error(`Failed to upsert daily_sales for ${dateStr}:`, salesError);
+      throw new Error(`Failed to upsert daily sales for ${dateStr}: ${salesError.message}`);
+    }
+    records = 1;
   }
-  let records = 1;
 
   // Insert order items (clear previous entries to avoid duplicates on re-run)
   const orderItemRows = Array.from(orderItemsMap.values()).map((item) => ({

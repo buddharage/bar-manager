@@ -16,12 +16,11 @@ interface ToastOrder {
   guid: string;
   openedDate: string;
   closedDate?: string;
-  totalAmount: number;
-  netAmount: number;
-  taxAmount: number;
-  tipAmount: number;
-  discountAmount: number;
+  voided?: boolean;
+  deleted?: boolean;
   checks: Array<{
+    voided?: boolean;
+    deleted?: boolean;
     selections: Array<{
       guid: string;
       item?: { guid: string };
@@ -29,6 +28,8 @@ interface ToastOrder {
       displayName: string;
       quantity: number;
       price: number;
+      preDiscountPrice: number;
+      voided?: boolean;
       modifiers?: Array<{
         guid: string;
         displayName: string;
@@ -40,6 +41,7 @@ interface ToastOrder {
     payments: Array<{
       type: string;
       amount: number;
+      tipAmount?: number;
     }>;
   }>;
 }

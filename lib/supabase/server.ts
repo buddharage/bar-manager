@@ -11,6 +11,10 @@ export function createServerClient() {
         persistSession: false,
         autoRefreshToken: false,
       },
+      global: {
+        // Ensure Next.js never caches Supabase responses in server components.
+        fetch: (url, init) => fetch(url, { ...init, cache: "no-store" }),
+      },
     }
   );
 }
