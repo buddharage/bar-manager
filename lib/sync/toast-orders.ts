@@ -23,9 +23,9 @@ export async function syncOrdersForDate(
   const orders = await fetchOrders(startOfDay, endOfDay);
 
   let grossSales = 0;
+  let netSales = 0;
   let taxAmount = 0;
   let tipAmount = 0;
-  let discountAmount = 0;
   const paymentBreakdown: Record<string, number> = {};
   const orderItemsMap = new Map<string, {
     name: string;
@@ -37,13 +37,18 @@ export async function syncOrdersForDate(
   }>();
 
   for (const order of orders) {
+    // Skip voided/deleted orders entirely
+    if (order.voided || order.deleted) continue;
+
     for (const check of order.checks || []) {
+      // Skip voided/deleted checks
+      if (check.voided || check.deleted) continue;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const c = check as any;
 
-      // Tax & discounts from check level (if available)
+      // Tax from check level
       taxAmount += c.taxAmount || 0;
-      discountAmount += c.appliedDiscountAmount || 0;
 
       // Tips: Toast v2 puts tip amounts on each payment, not on the check.
       for (const payment of check.payments || []) {
@@ -52,10 +57,15 @@ export async function syncOrdersForDate(
           (paymentBreakdown[payment.type] || 0) + payment.amount;
       }
 
-      // Gross sales: derive from selection prices (proven reliable; check-level
-      // totalAmount/amount fields don't exist in Toast v2 ordersBulk responses).
+      // Sales from selections:
+      // - preDiscountPrice = gross (before discounts, includes qty × unit + modifiers)
+      // - price = net (after discounts, before tax)
       for (const selection of check.selections || []) {
-        grossSales += selection.price || 0;
+        if (selection.voided) continue;
+
+        grossSales += selection.preDiscountPrice || 0;
+        netSales += selection.price || 0;
+
         const itemGuid = selection.item?.guid || null;
         const category = itemGuid ? (categoryMap.get(itemGuid) || null) : null;
 
@@ -88,11 +98,12 @@ export async function syncOrdersForDate(
   // and cause the dashboard "latest sales" card to show $0.
   let records = 0;
   if (orders.length > 0) {
+    const discountAmount = grossSales - netSales;
     const { error: salesError } = await supabase.from("daily_sales").upsert(
       {
         date: dateStr,
         gross_sales: grossSales,
-        net_sales: grossSales - discountAmount,
+        net_sales: netSales,
         tax_collected: taxAmount,
         tips: tipAmount,
         discounts: discountAmount,

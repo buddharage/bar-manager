@@ -16,7 +16,11 @@ interface ToastOrder {
   guid: string;
   openedDate: string;
   closedDate?: string;
+  voided?: boolean;
+  deleted?: boolean;
   checks: Array<{
+    voided?: boolean;
+    deleted?: boolean;
     selections: Array<{
       guid: string;
       item?: { guid: string };
@@ -24,6 +28,8 @@ interface ToastOrder {
       displayName: string;
       quantity: number;
       price: number;
+      preDiscountPrice: number;
+      voided?: boolean;
       modifiers?: Array<{
         guid: string;
         displayName: string;
