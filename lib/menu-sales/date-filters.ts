@@ -1,6 +1,7 @@
 export type DatePreset =
   | "yesterday"
   | "past_week"
+  | "past_2_weeks"
   | "past_month"
   | "last_year"
   | "this_year"
@@ -51,6 +52,12 @@ export function getDateRange(
       const w = new Date(today);
       w.setDate(w.getDate() - 7);
       return { start: fmtLocal(w), end: fmtLocal(today) };
+    }
+
+    case "past_2_weeks": {
+      const w2 = new Date(today);
+      w2.setDate(w2.getDate() - 14);
+      return { start: fmtLocal(w2), end: fmtLocal(today) };
     }
 
     case "past_month": {

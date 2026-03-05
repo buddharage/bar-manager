@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { type DatePreset, getDateRange } from "@/lib/menu-sales/date-filters";
+import { computeCases } from "@/lib/menu-sales/aggregation";
 
 type SortField = "name" | "quantity" | "revenue";
 type SortDirection = "asc" | "desc";
@@ -48,10 +49,15 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+function formatCases(item: MenuSaleItem): string {
+  const cases = computeCases(item.quantity, item.category);
+  return cases !== null ? String(cases) : "";
+}
 
 const presets: { key: DatePreset; label: string }[] = [
   { key: "yesterday", label: "Yesterday" },
   { key: "past_week", label: "Past Week" },
+  { key: "past_2_weeks", label: "Past 2 Weeks" },
   { key: "past_month", label: "Past Month" },
   { key: "this_year", label: "This Year" },
   { key: "last_year", label: "Last Year" },
@@ -71,7 +77,7 @@ function SortIndicator({ field, sortField, sortDirection }: { field: SortField; 
 }
 
 export default function MenuSalesPage() {
-  const [activePreset, setActivePreset] = useState<DatePreset>("yesterday");
+  const [activePreset, setActivePreset] = useState<DatePreset>("past_2_weeks");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [items, setItems] = useState<MenuSaleItem[]>([]);
@@ -356,7 +362,7 @@ export default function MenuSalesPage() {
                       <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
                     </button>
                   </TableHead>
-                  <TableHead>Size</TableHead>
+                  <TableHead className="text-right">Cases</TableHead>
                   <TableHead className="text-right">
                     <button
                       type="button"
@@ -394,7 +400,15 @@ export default function MenuSalesPage() {
                                 ({groupItems.length} item{groupItems.length !== 1 ? "s" : ""})
                               </span>
                             </TableCell>
-                            <TableCell />
+                            <TableCell className="text-right font-semibold">
+                              {(() => {
+                                const cases = groupItems.reduce((s, i) => {
+                                  const c = computeCases(i.quantity, i.category);
+                                  return c !== null ? s + c : s;
+                                }, 0);
+                                return cases > 0 ? cases : "";
+                              })()}
+                            </TableCell>
                             <TableCell className="text-right font-semibold">
                               {groupQty.toLocaleString()}
                             </TableCell>
@@ -419,10 +433,8 @@ export default function MenuSalesPage() {
                                   )}
                                   {item.name}
                                 </TableCell>
-                                <TableCell>
-                                  {item.size && (
-                                    <Badge variant="outline">{item.size}</Badge>
-                                  )}
+                                <TableCell className="text-right">
+                                  {formatCases(item)}
                                 </TableCell>
                                 <TableCell className="text-right">
                                   {item.quantity.toLocaleString()}
@@ -469,10 +481,8 @@ export default function MenuSalesPage() {
                             )}
                             {item.name}
                           </TableCell>
-                          <TableCell>
-                            {item.size && (
-                              <Badge variant="outline">{item.size}</Badge>
-                            )}
+                          <TableCell className="text-right">
+                            {formatCases(item)}
                           </TableCell>
                           <TableCell className="text-right">
                             {item.quantity.toLocaleString()}

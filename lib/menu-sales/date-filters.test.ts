@@ -102,6 +102,33 @@ describe("getDateRange", () => {
     });
   });
 
+  // ─── "past_2_weeks" ──────────────────────────────────────────────
+  describe("past_2_weeks", () => {
+    it("returns 14 days back through today", () => {
+      const now = utc(2026, 3, 15);
+      expect(getDateRange("past_2_weeks", now, TZ)).toEqual({
+        start: "2026-03-01",
+        end: "2026-03-15",
+      });
+    });
+
+    it("crosses month boundary correctly", () => {
+      const now = utc(2026, 3, 5); // March 5
+      expect(getDateRange("past_2_weeks", now, TZ)).toEqual({
+        start: "2026-02-19",
+        end: "2026-03-05",
+      });
+    });
+
+    it("crosses year boundary correctly", () => {
+      const now = utc(2026, 1, 5); // Jan 5
+      expect(getDateRange("past_2_weeks", now, TZ)).toEqual({
+        start: "2025-12-22",
+        end: "2026-01-05",
+      });
+    });
+  });
+
   // ─── "past_month" ─────────────────────────────────────────────────
   describe("past_month", () => {
     it("returns one calendar month back through today", () => {
