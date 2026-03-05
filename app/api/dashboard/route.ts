@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         .from("daily_sales")
         .select("date, net_sales, tax_collected, tips")
         .gte("date", sevenDaysAgoStr)
+        .gt("gross_sales", 0)
         .order("date", { ascending: true }),
       supabase
         .from("inventory_alerts")
