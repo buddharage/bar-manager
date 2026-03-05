@@ -49,9 +49,21 @@ function formatCurrency(amount: number): string {
 }
 
 
+function computeCases(item: MenuSaleItem): string {
+  const cat = item.category?.toLowerCase() ?? "";
+  if (cat.includes("beer")) {
+    return String(Math.ceil(item.quantity / 24));
+  }
+  if (cat.includes("wine")) {
+    return String(Math.ceil(item.quantity / 12));
+  }
+  return "";
+}
+
 const presets: { key: DatePreset; label: string }[] = [
   { key: "yesterday", label: "Yesterday" },
   { key: "past_week", label: "Past Week" },
+  { key: "past_2_weeks", label: "Past 2 Weeks" },
   { key: "past_month", label: "Past Month" },
   { key: "this_year", label: "This Year" },
   { key: "last_year", label: "Last Year" },
@@ -356,7 +368,7 @@ export default function MenuSalesPage() {
                       <SortIndicator field="name" sortField={sortField} sortDirection={sortDirection} />
                     </button>
                   </TableHead>
-                  <TableHead>Size</TableHead>
+                  <TableHead className="text-right">Cases</TableHead>
                   <TableHead className="text-right">
                     <button
                       type="button"
@@ -419,10 +431,8 @@ export default function MenuSalesPage() {
                                   )}
                                   {item.name}
                                 </TableCell>
-                                <TableCell>
-                                  {item.size && (
-                                    <Badge variant="outline">{item.size}</Badge>
-                                  )}
+                                <TableCell className="text-right">
+                                  {computeCases(item)}
                                 </TableCell>
                                 <TableCell className="text-right">
                                   {item.quantity.toLocaleString()}
@@ -469,10 +479,8 @@ export default function MenuSalesPage() {
                             )}
                             {item.name}
                           </TableCell>
-                          <TableCell>
-                            {item.size && (
-                              <Badge variant="outline">{item.size}</Badge>
-                            )}
+                          <TableCell className="text-right">
+                            {computeCases(item)}
                           </TableCell>
                           <TableCell className="text-right">
                             {item.quantity.toLocaleString()}
