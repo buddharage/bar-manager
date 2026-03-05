@@ -26,7 +26,6 @@ export async function syncOrdersForDate(
   let netSales = 0;
   let taxAmount = 0;
   let tipAmount = 0;
-  let validOrders = 0;
   const paymentBreakdown: Record<string, number> = {};
   const orderItemsMap = new Map<string, {
     name: string;
@@ -40,7 +39,6 @@ export async function syncOrdersForDate(
   for (const order of orders) {
     // Skip voided/deleted orders entirely
     if (order.voided || order.deleted) continue;
-    validOrders++;
 
     for (const check of order.checks || []) {
       // Skip voided/deleted checks
@@ -99,7 +97,7 @@ export async function syncOrdersForDate(
   // when the restaurant is closed would overwrite any previously-synced data
   // and cause the dashboard "latest sales" card to show $0.
   let records = 0;
-  if (validOrders > 0 && grossSales > 0) {
+  if (orders.length > 0) {
     const discountAmount = grossSales - netSales;
     const { error: salesError } = await supabase.from("daily_sales").upsert(
       {
