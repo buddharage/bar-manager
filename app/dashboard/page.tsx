@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
@@ -94,27 +95,40 @@ export default function DashboardPage() {
     }
   }, [fetchDashboard]);
 
+  const triggerBackfill = useCallback(async () => {
+    setBackfilling(true);
+    setSyncMessage(null);
+    try {
+      const end = new Date();
+      end.setDate(end.getDate() - 1); // yesterday
+      const start = new Date(end);
+      start.setDate(start.getDate() - 89); // 90 days total
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const res = await fetch("/api/sync/toast/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: fmt(start), endDate: fmt(end) }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setSyncMessage(`Backfill failed: ${body.error}`);
+      } else {
+        setSyncMessage(`Backfilled ${body.total_orders} orders across ${body.days_processed} days`);
+        await fetchDashboard();
+      }
+    } catch (err) {
+      setSyncMessage(`Backfill failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBackfilling(false);
+    }
+  }, [fetchDashboard]);
+
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  // Aggregate top items by name
-  const topItems = useMemo(() => {
-    if (!data) return [];
-    const map = new Map<string, { name: string; quantity: number; revenue: number }>();
-    for (const item of data.topItems) {
-      const existing = map.get(item.name);
-      if (existing) {
-        existing.quantity += item.quantity;
-        existing.revenue += item.revenue;
-      } else {
-        map.set(item.name, { name: item.name, quantity: item.quantity, revenue: item.revenue });
-      }
-    }
-    return Array.from(map.values())
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
-  }, [data]);
+  const topItems = data?.topItems ?? [];
 
   // Inventory stats
   const totalIngredients = data?.ingredients.length ?? 0;
@@ -152,6 +166,9 @@ export default function DashboardPage() {
               {new Date(lastSync.started_at).toLocaleString()}
             </div>
           )}
+          <Button variant="outline" size="sm" onClick={triggerBackfill} disabled={backfilling || syncing}>
+            {backfilling ? "Backfilling..." : "Backfill 90 Days"}
+          </Button>
           <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
             {loading ? "Loading..." : "Refresh"}
           </Button>
@@ -221,8 +238,11 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex gap-3">
-            <Button onClick={triggerSync} disabled={syncing}>
+            <Button onClick={triggerSync} disabled={syncing || backfilling}>
               {syncing ? "Syncing Toast data..." : "Sync Toast Data (Last 7 Days)"}
+            </Button>
+            <Button variant="outline" onClick={triggerBackfill} disabled={backfilling || syncing}>
+              {backfilling ? "Backfilling..." : "Backfill 90 Days"}
             </Button>
             <Link
               href="/settings"
@@ -336,22 +356,33 @@ export default function DashboardPage() {
                 No sales data in the last 7 days.
               </p>
             ) : (
-              <div className="flex items-end gap-1.5" style={{ height: 80 }}>
-                {recentSales.map((day) => {
-                  const pct = ((day.net_sales || 0) / maxDailySales) * 100;
-                  return (
-                    <div key={day.date} className="flex flex-1 flex-col items-center gap-1">
+              <div className="space-y-1">
+                <div className="flex items-end gap-1.5" style={{ height: 64 }}>
+                  {recentSales.map((day) => {
+                    const pct = ((day.net_sales || 0) / maxDailySales) * 100;
+                    return (
                       <div
-                        className="w-full rounded-sm bg-primary/80"
+                        key={day.date}
+                        className="group relative flex-1 rounded-sm bg-primary/80 hover:bg-primary cursor-pointer"
                         style={{ height: `${Math.max(pct, 4)}%` }}
-                        title={`${formatDate(day.date)}: ${formatCurrency(day.net_sales)}`}
-                      />
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(day.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "narrow" })}
-                      </span>
-                    </div>
-                  );
-                })}
+                      >
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-10">
+                          <div className="whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md border">
+                            <div className="font-medium">{formatDate(day.date)}</div>
+                            <div>{formatCurrency(day.net_sales)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-1.5">
+                  {recentSales.map((day) => (
+                    <span key={day.date} className="flex-1 text-center text-[10px] text-muted-foreground">
+                      {new Date(day.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "narrow" })}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>

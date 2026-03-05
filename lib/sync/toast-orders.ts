@@ -1,26 +1,24 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { fetchOrders, fetchMenuItemCategoryMap, fetchSizeOptionGroupGuids } from "@/lib/integrations/toast-client";
-import { getLocalDayUTCRange, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
+import { RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
 
 /**
  * Sync a single day's orders from Toast into daily_sales + order_items.
  * Returns the number of records upserted/inserted.
  *
  * `dateStr` is a local calendar date (YYYY-MM-DD) in the restaurant's
- * timezone. The Toast API is queried for the corresponding UTC range so
- * that the full local business day is captured (e.g. midnight–midnight ET
- * instead of midnight–midnight UTC).
+ * timezone. Uses Toast's `businessDate` parameter so that Toast itself
+ * determines the business day boundaries, avoiding UTC conversion issues
+ * that could cause orders to land on the wrong day.
  */
 export async function syncOrdersForDate(
   supabase: SupabaseClient,
   dateStr: string,
   categoryMap: Map<string, string>,
   sizeGroupGuids: Set<string>,
-  timezone: string = RESTAURANT_TIMEZONE,
+  _timezone: string = RESTAURANT_TIMEZONE,
 ): Promise<{ records: number; ordersProcessed: number }> {
-  const { start: startOfDay, end: endOfDay } = getLocalDayUTCRange(dateStr, timezone);
-
-  const orders = await fetchOrders(startOfDay, endOfDay);
+  const orders = await fetchOrders(dateStr);
 
   let grossSales = 0;
   let netSales = 0;
@@ -93,11 +91,15 @@ export async function syncOrdersForDate(
     }
   }
 
-  // Only upsert daily sales when we actually have orders — writing a $0 row
-  // when the restaurant is closed would overwrite any previously-synced data
-  // and cause the dashboard "latest sales" card to show $0.
+  // Always clear stale data for this date first so previous bad syncs
+  // (e.g. $0 rows from old UTC-based queries) don't persist.
+  await supabase.from("order_items").delete().eq("date", dateStr);
+  await supabase.from("daily_sales").delete().eq("date", dateStr);
+
   let records = 0;
-  if (orders.length > 0) {
+
+  // Only write daily sales when we have actual revenue
+  if (grossSales > 0) {
     const discountAmount = grossSales - netSales;
     const { error: salesError } = await supabase.from("daily_sales").upsert(
       {
@@ -118,7 +120,7 @@ export async function syncOrdersForDate(
     records = 1;
   }
 
-  // Insert order items (clear previous entries to avoid duplicates on re-run)
+  // Insert order items
   const orderItemRows = Array.from(orderItemsMap.values()).map((item) => ({
     date: dateStr,
     menu_item_guid: item.menu_item_guid,
@@ -130,10 +132,6 @@ export async function syncOrdersForDate(
   }));
 
   if (orderItemRows.length > 0) {
-    const { error: deleteError } = await supabase.from("order_items").delete().eq("date", dateStr);
-    if (deleteError) {
-      console.error(`Failed to delete old order_items for ${dateStr}:`, deleteError);
-    }
     const { error: insertError } = await supabase.from("order_items").insert(orderItemRows);
     if (insertError) {
       console.error(`Failed to insert order_items for ${dateStr}:`, insertError);

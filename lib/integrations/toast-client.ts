@@ -147,10 +147,15 @@ async function toastFetch<T>(path: string, options?: RequestInit): Promise<T> {
   throw lastError!;
 }
 
-// Fetch orders for a date range (ISO strings)
-export async function fetchOrders(startDate: string, endDate: string): Promise<ToastOrder[]> {
+// Fetch orders for a date range (ISO strings) or a single business date (YYYY-MM-DD)
+export async function fetchOrders(startDate: string, endDate: string): Promise<ToastOrder[]>;
+export async function fetchOrders(businessDate: string): Promise<ToastOrder[]>;
+export async function fetchOrders(startOrBizDate: string, endDate?: string): Promise<ToastOrder[]> {
+  const query = endDate
+    ? `startDate=${encodeURIComponent(startOrBizDate)}&endDate=${encodeURIComponent(endDate)}`
+    : `businessDate=${startOrBizDate.replace(/-/g, "")}`;
   const data = await toastFetch<unknown>(
-    `/orders/v2/ordersBulk?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+    `/orders/v2/ordersBulk?${query}`
   );
   return normalizeToArray<ToastOrder>(data);
 }
