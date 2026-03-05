@@ -55,6 +55,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
@@ -91,6 +92,35 @@ export default function DashboardPage() {
       setSyncMessage(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSyncing(false);
+    }
+  }, [fetchDashboard]);
+
+  const triggerBackfill = useCallback(async () => {
+    setBackfilling(true);
+    setSyncMessage(null);
+    try {
+      const end = new Date();
+      end.setDate(end.getDate() - 1); // yesterday
+      const start = new Date(end);
+      start.setDate(start.getDate() - 89); // 90 days total
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const res = await fetch("/api/sync/toast/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: fmt(start), endDate: fmt(end) }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setSyncMessage(`Backfill failed: ${body.error}`);
+      } else {
+        setSyncMessage(`Backfilled ${body.total_orders} orders across ${body.days_processed} days`);
+        await fetchDashboard();
+      }
+    } catch (err) {
+      setSyncMessage(`Backfill failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBackfilling(false);
     }
   }, [fetchDashboard]);
 
@@ -136,6 +166,9 @@ export default function DashboardPage() {
               {new Date(lastSync.started_at).toLocaleString()}
             </div>
           )}
+          <Button variant="outline" size="sm" onClick={triggerBackfill} disabled={backfilling || syncing}>
+            {backfilling ? "Backfilling..." : "Backfill 90 Days"}
+          </Button>
           <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
             {loading ? "Loading..." : "Refresh"}
           </Button>
@@ -205,8 +238,11 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex gap-3">
-            <Button onClick={triggerSync} disabled={syncing}>
+            <Button onClick={triggerSync} disabled={syncing || backfilling}>
               {syncing ? "Syncing Toast data..." : "Sync Toast Data (Last 7 Days)"}
+            </Button>
+            <Button variant="outline" onClick={triggerBackfill} disabled={backfilling || syncing}>
+              {backfilling ? "Backfilling..." : "Backfill 90 Days"}
             </Button>
             <Link
               href="/settings"
