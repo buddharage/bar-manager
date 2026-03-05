@@ -1,26 +1,24 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { fetchOrders, fetchMenuItemCategoryMap, fetchSizeOptionGroupGuids } from "@/lib/integrations/toast-client";
-import { getLocalDayUTCRange, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
+import { RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
 
 /**
  * Sync a single day's orders from Toast into daily_sales + order_items.
  * Returns the number of records upserted/inserted.
  *
  * `dateStr` is a local calendar date (YYYY-MM-DD) in the restaurant's
- * timezone. The Toast API is queried for the corresponding UTC range so
- * that the full local business day is captured (e.g. midnight–midnight ET
- * instead of midnight–midnight UTC).
+ * timezone. Uses Toast's `businessDate` parameter so that Toast itself
+ * determines the business day boundaries, avoiding UTC conversion issues
+ * that could cause orders to land on the wrong day.
  */
 export async function syncOrdersForDate(
   supabase: SupabaseClient,
   dateStr: string,
   categoryMap: Map<string, string>,
   sizeGroupGuids: Set<string>,
-  timezone: string = RESTAURANT_TIMEZONE,
+  _timezone: string = RESTAURANT_TIMEZONE,
 ): Promise<{ records: number; ordersProcessed: number }> {
-  const { start: startOfDay, end: endOfDay } = getLocalDayUTCRange(dateStr, timezone);
-
-  const orders = await fetchOrders(startOfDay, endOfDay);
+  const orders = await fetchOrders(dateStr);
 
   let grossSales = 0;
   let netSales = 0;
