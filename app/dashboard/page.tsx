@@ -327,10 +327,16 @@ export default function DashboardPage() {
                     return (
                       <div
                         key={day.date}
-                        className="flex-1 rounded-sm bg-primary/80"
+                        className="group relative flex-1 rounded-sm bg-primary/80 hover:bg-primary cursor-pointer"
                         style={{ height: `${Math.max(pct, 4)}%` }}
-                        title={`${formatDate(day.date)}: ${formatCurrency(day.net_sales)}`}
-                      />
+                      >
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-10">
+                          <div className="whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md border">
+                            <div className="font-medium">{formatDate(day.date)}</div>
+                            <div>{formatCurrency(day.net_sales)}</div>
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
