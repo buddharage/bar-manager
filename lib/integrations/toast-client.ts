@@ -153,7 +153,7 @@ export async function fetchOrders(businessDate: string): Promise<ToastOrder[]>;
 export async function fetchOrders(startOrBizDate: string, endDate?: string): Promise<ToastOrder[]> {
   const query = endDate
     ? `startDate=${encodeURIComponent(startOrBizDate)}&endDate=${encodeURIComponent(endDate)}`
-    : `businessDate=${encodeURIComponent(startOrBizDate)}`;
+    : `businessDate=${startOrBizDate.replace(/-/g, "")}`;
   const data = await toastFetch<unknown>(
     `/orders/v2/ordersBulk?${query}`
   );
