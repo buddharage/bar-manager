@@ -406,7 +406,15 @@ export default function MenuSalesPage() {
                                 ({groupItems.length} item{groupItems.length !== 1 ? "s" : ""})
                               </span>
                             </TableCell>
-                            <TableCell />
+                            <TableCell className="text-right font-semibold">
+                              {(() => {
+                                const cases = groupItems.reduce((s, i) => {
+                                  const c = computeCases(i);
+                                  return c ? s + Number(c) : s;
+                                }, 0);
+                                return cases > 0 ? cases : "";
+                              })()}
+                            </TableCell>
                             <TableCell className="text-right font-semibold">
                               {groupQty.toLocaleString()}
                             </TableCell>
