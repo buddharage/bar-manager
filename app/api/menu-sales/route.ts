@@ -128,6 +128,16 @@ export async function GET(request: NextRequest) {
     if (existing) {
       existing.quantity += item.quantity;
       existing.revenue += item.revenue;
+      // Prefer a beer/wine category over a non-beer/wine one so that
+      // aggregated items (e.g. "High Life and a Shot" from "Shots" +
+      // "Miller High Life" from "Beer") end up with the beer/wine category.
+      const existingCatLower = existing.category.toLowerCase();
+      const newCatLower = rawCategory.toLowerCase();
+      const existingIsBeerWine = existingCatLower.includes("beer") || existingCatLower.includes("wine");
+      const newIsBeerWine = newCatLower.includes("beer") || newCatLower.includes("wine");
+      if (!existingIsBeerWine && newIsBeerWine) {
+        existing.category = rawCategory;
+      }
       const sub = existing.subItems.get(item.name);
       if (sub) {
         sub.quantity += item.quantity;
