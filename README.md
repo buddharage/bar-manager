@@ -243,7 +243,7 @@ lib/
   integrations/           Toast, Google, xtraCHEF, QBO, Sling API clients
   inventory/              Expected inventory calculation engine
   sync/                   Toast order sync + xtraCHEF recipe sync logic
-  menu-sales/             Date range presets and filtering utilities
+  menu-sales/             Date range presets, filtering, item normalization, and case computation
   units.ts                Unit conversion (ml/oz/volume/weight + purchase units)
   ai/
     agent.ts              Gemini Flash agent with function-calling tools

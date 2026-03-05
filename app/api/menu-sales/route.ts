@@ -1,52 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { verifyToken } from "@/lib/auth/session";
-
-// Normalize item names so that variants of the same product are aggregated.
-// A product can appear on the Toast menu as:
-//   "Item Name"  /  "Item Name (Happy Hour)"  /  "Item Name and a Shot"
-//   "Item & Shot"  /  "Item and a Shot"  /  "Item and Shot"
-// All should roll up under the base name.
-// This applies to specific beers (Miller High Life, Tecate, Corona)
-// and all wine-category items.
-//
-// Additionally, short-name aliases are mapped to their canonical name
-// (e.g. "High Life" → "Miller High Life").
-const BEER_ALIASES: Record<string, string> = {
-  "high life": "Miller High Life",
-  "miller high life": "Miller High Life",
-  "tecate": "Tecate",
-};
-
-function normalizeItemName(name: string, category?: string): string {
-  // "(Happy Hour)" is a pricing variant that applies to any category —
-  // strip it universally so happy-hour items aggregate with their base item.
-  let normalized = name.replace(/\s*\(Happy Hour\)\s*$/i, "").trim();
-
-  const lowerCat = category?.toLowerCase();
-  const isBeerOrWine = lowerCat?.includes("wine") || lowerCat?.includes("beer");
-
-  // Tentatively strip shot suffixes to check against known beer names.
-  const withoutShot = normalized
-    .replace(/\s+and\s+(a\s+)?Shot\s*$/i, "")
-    .replace(/\s*&\s*Shot\s*$/i, "")
-    .trim();
-
-  if (isBeerOrWine) {
-    // Beer/wine category — always strip shot suffixes and apply aliases.
-    normalized = withoutShot;
-    const alias = BEER_ALIASES[normalized.toLowerCase()];
-    if (alias) normalized = alias;
-  } else {
-    // Outside beer/wine categories, items like "High Life and Shot" may be
-    // categorised under "Shots" or similar. Strip the shot suffix and check
-    // if the result matches a known beer alias — only then apply it.
-    const alias = BEER_ALIASES[withoutShot.toLowerCase()];
-    if (alias) normalized = alias;
-  }
-
-  return normalized;
-}
+import { normalizeItemName, preferredCategory } from "@/lib/menu-sales/aggregation";
 
 export async function GET(request: NextRequest) {
   // Verify session
@@ -128,16 +83,7 @@ export async function GET(request: NextRequest) {
     if (existing) {
       existing.quantity += item.quantity;
       existing.revenue += item.revenue;
-      // Prefer a beer/wine category over a non-beer/wine one so that
-      // aggregated items (e.g. "High Life and a Shot" from "Shots" +
-      // "Miller High Life" from "Beer") end up with the beer/wine category.
-      const existingCatLower = existing.category.toLowerCase();
-      const newCatLower = rawCategory.toLowerCase();
-      const existingIsBeerWine = existingCatLower.includes("beer") || existingCatLower.includes("wine");
-      const newIsBeerWine = newCatLower.includes("beer") || newCatLower.includes("wine");
-      if (!existingIsBeerWine && newIsBeerWine) {
-        existing.category = rawCategory;
-      }
+      existing.category = preferredCategory(existing.category, rawCategory);
       const sub = existing.subItems.get(item.name);
       if (sub) {
         sub.quantity += item.quantity;

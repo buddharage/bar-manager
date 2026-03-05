@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { type DatePreset, getDateRange } from "@/lib/menu-sales/date-filters";
+import { computeCases } from "@/lib/menu-sales/aggregation";
 
 type SortField = "name" | "quantity" | "revenue";
 type SortDirection = "asc" | "desc";
@@ -48,16 +49,9 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-
-function computeCases(item: MenuSaleItem): string {
-  const cat = item.category?.toLowerCase() ?? "";
-  if (cat.includes("beer")) {
-    return String(Math.ceil(item.quantity / 24));
-  }
-  if (cat.includes("wine")) {
-    return String(Math.ceil(item.quantity / 12));
-  }
-  return "";
+function formatCases(item: MenuSaleItem): string {
+  const cases = computeCases(item.quantity, item.category);
+  return cases !== null ? String(cases) : "";
 }
 
 const presets: { key: DatePreset; label: string }[] = [
@@ -409,8 +403,8 @@ export default function MenuSalesPage() {
                             <TableCell className="text-right font-semibold">
                               {(() => {
                                 const cases = groupItems.reduce((s, i) => {
-                                  const c = computeCases(i);
-                                  return c ? s + Number(c) : s;
+                                  const c = computeCases(i.quantity, i.category);
+                                  return c !== null ? s + c : s;
                                 }, 0);
                                 return cases > 0 ? cases : "";
                               })()}
@@ -440,7 +434,7 @@ export default function MenuSalesPage() {
                                   {item.name}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {computeCases(item)}
+                                  {formatCases(item)}
                                 </TableCell>
                                 <TableCell className="text-right">
                                   {item.quantity.toLocaleString()}
@@ -488,7 +482,7 @@ export default function MenuSalesPage() {
                             {item.name}
                           </TableCell>
                           <TableCell className="text-right">
-                            {computeCases(item)}
+                            {formatCases(item)}
                           </TableCell>
                           <TableCell className="text-right">
                             {item.quantity.toLocaleString()}
