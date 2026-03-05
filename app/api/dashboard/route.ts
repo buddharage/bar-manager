@@ -4,6 +4,7 @@ import { verifyToken } from "@/lib/auth/session";
 import { getLocalDateStr, RESTAURANT_TIMEZONE } from "@/lib/sync/timezone";
 import { fetchAllMenuLookups } from "@/lib/integrations/toast-client";
 import { syncOrdersForDate } from "@/lib/sync/toast-orders";
+import { normalizeItemName } from "@/lib/menu-sales/aggregation";
 
 export async function GET(request: NextRequest) {
   // Verify session
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
         .select("id, par_level, expected_quantity, last_counted_at"),
       supabase
         .from("order_items")
-        .select("name, quantity, revenue")
+        .select("name, category, quantity, revenue")
         .gte("date", sevenDaysAgoStr)
         .order("quantity", { ascending: false })
         .limit(50),
@@ -83,13 +84,29 @@ export async function GET(request: NextRequest) {
     if (ingredientsSummaryResult.error) queryErrors.push(`Ingredients: ${ingredientsSummaryResult.error.message}`);
     if (topItemsResult.error) queryErrors.push(`Top items: ${topItemsResult.error.message}`);
 
+    // Aggregate top items using the same normalization as menu-sales
+    const topItemsMap = new Map<string, { name: string; quantity: number; revenue: number }>();
+    for (const item of topItemsResult.data || []) {
+      const canonicalName = normalizeItemName(item.name, item.category ?? undefined);
+      const existing = topItemsMap.get(canonicalName);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.revenue += item.revenue;
+      } else {
+        topItemsMap.set(canonicalName, { name: canonicalName, quantity: item.quantity, revenue: item.revenue });
+      }
+    }
+    const topItems = Array.from(topItemsMap.values())
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5);
+
     return NextResponse.json({
       latestSales: latestSalesResult.data,
       recentSales: recentSalesResult.data || [],
       alerts: alertsResult.data || [],
       lastSync: syncResult.data,
       ingredients: ingredientsSummaryResult.data || [],
-      topItems: topItemsResult.data || [],
+      topItems,
       queryErrors,
     });
   } catch (err) {

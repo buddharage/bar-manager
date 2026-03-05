@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,23 +98,7 @@ export default function DashboardPage() {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  // Aggregate top items by name
-  const topItems = useMemo(() => {
-    if (!data) return [];
-    const map = new Map<string, { name: string; quantity: number; revenue: number }>();
-    for (const item of data.topItems) {
-      const existing = map.get(item.name);
-      if (existing) {
-        existing.quantity += item.quantity;
-        existing.revenue += item.revenue;
-      } else {
-        map.set(item.name, { name: item.name, quantity: item.quantity, revenue: item.revenue });
-      }
-    }
-    return Array.from(map.values())
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
-  }, [data]);
+  const topItems = data?.topItems ?? [];
 
   // Inventory stats
   const totalIngredients = data?.ingredients.length ?? 0;
@@ -336,22 +320,27 @@ export default function DashboardPage() {
                 No sales data in the last 7 days.
               </p>
             ) : (
-              <div className="flex items-end gap-1.5" style={{ height: 80 }}>
-                {recentSales.map((day) => {
-                  const pct = ((day.net_sales || 0) / maxDailySales) * 100;
-                  return (
-                    <div key={day.date} className="flex flex-1 flex-col items-center gap-1">
+              <div className="space-y-1">
+                <div className="flex items-end gap-1.5" style={{ height: 64 }}>
+                  {recentSales.map((day) => {
+                    const pct = ((day.net_sales || 0) / maxDailySales) * 100;
+                    return (
                       <div
-                        className="w-full rounded-sm bg-primary/80"
+                        key={day.date}
+                        className="flex-1 rounded-sm bg-primary/80"
                         style={{ height: `${Math.max(pct, 4)}%` }}
                         title={`${formatDate(day.date)}: ${formatCurrency(day.net_sales)}`}
                       />
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(day.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "narrow" })}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                <div className="flex gap-1.5">
+                  {recentSales.map((day) => (
+                    <span key={day.date} className="flex-1 text-center text-[10px] text-muted-foreground">
+                      {new Date(day.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "narrow" })}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
