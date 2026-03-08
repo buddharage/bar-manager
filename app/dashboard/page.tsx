@@ -154,9 +154,9 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-semibold shrink-0">Dashboard</h1>
+        <div className="flex flex-wrap items-center gap-3">
           {lastSync && (
             <div className="text-sm text-muted-foreground">
               Last Toast sync:{" "}
@@ -166,12 +166,14 @@ export default function DashboardPage() {
               {new Date(lastSync.started_at).toLocaleString()}
             </div>
           )}
-          <Button variant="outline" size="sm" onClick={triggerBackfill} disabled={backfilling || syncing}>
-            {backfilling ? "Backfilling..." : "Backfill 90 Days"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
-            {loading ? "Loading..." : "Refresh"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={triggerBackfill} disabled={backfilling || syncing}>
+              {backfilling ? "Backfilling..." : "Backfill 90 Days"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
+              {loading ? "Loading..." : "Refresh"}
+            </Button>
+          </div>
         </div>
       </div>
 
