@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bar Manager",
+  title: "Moe",
   description: "AI-powered bar operations assistant",
   icons: {
-    icon: "/favicon.png",
+    icon: "/moe.svg",
   },
 };
 
