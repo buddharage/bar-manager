@@ -304,6 +304,21 @@ Push notifications require the `push_subscriptions` and `notification_preference
 > - Each browser/device registers its own subscription. Enable notifications on each device you use.
 > - If notifications are "Blocked" in the settings card, you previously denied the browser permission prompt. Reset it in your browser's site settings (click the lock icon in the address bar → Notifications → Allow).
 
+#### PWA next steps
+
+The core PWA push notification infrastructure is in place. To get it fully working in production:
+
+1. **Generate and deploy VAPID keys** — Run `npx web-push generate-vapid-keys`, add both keys to `.env.local` and Vercel environment variables
+2. **Run migration 013** — Apply `supabase/migrations/013_push_subscriptions.sql` if not already applied
+3. **Deploy with HTTPS** — Push notifications require a secure context; `localhost` works for dev but production must be HTTPS
+4. **Replace placeholder icons** — `public/icon-192.png` and `public/icon-512.png` are placeholders; replace with branded bar-manager icons for the PWA install experience
+5. **Test PWA install flow** — Install the app from Chrome (desktop and mobile) and verify it launches in standalone mode
+6. **Test inventory alert notifications** — Trigger a Toast stock webhook or inventory recalculation that drops an item below par and confirm the push notification arrives
+7. **Test chat response notifications** — Send a chat message, switch away from the tab, and verify the notification appears
+8. **Test on iOS Safari** — iOS 16.4+ supports Web Push for home-screen PWAs; verify the permission prompt and notification delivery
+9. **Add subscription renewal prompts** — Expired subscriptions are cleaned up on send failure but users are not prompted to re-subscribe
+10. **Consider notification history** — Sent notifications are ephemeral; adding a `notification_history` table would enable in-app notification center and audit logging
+
 ---
 
 ### Step 9. Sync xtraCHEF recipes (optional)
