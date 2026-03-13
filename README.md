@@ -17,6 +17,7 @@ AI-powered operations dashboard for a 50-seat cocktail bar in Brooklyn, NY. Inte
 npm install
 cp .env.local.example .env.local
 # Fill in your credentials (see steps below)
+npx web-push generate-vapid-keys   # optional — for push notifications
 npm run dev
 ```
 
@@ -49,6 +50,7 @@ The app will not work until the database tables are created. Run each migration 
 11. `supabase/migrations/010_recipe_refrigerate_cocktail_batch.sql` — Cocktail batch refrigerate flags and metadata
 12. `supabase/migrations/011_syrup_metadata_backfill.sql` — Syrup recipe metadata backfill
 13. `supabase/migrations/012_gift_cards.sql` — Gift card tracking table
+14. `supabase/migrations/013_push_subscriptions.sql` — Push notification subscriptions and preferences
 
 For each file: copy the full contents, paste into the SQL Editor, and click **Run**. You must run them in order because later migrations may depend on earlier ones.
 
@@ -107,14 +109,34 @@ Connects Google Drive and Gmail so the AI assistant can search bar documents, re
 6. Go to **Settings** in the app and click **Connect Google** to complete the OAuth flow
 7. Create two folders in your Google Drive named **Finances** and **Operations** — the sync pulls documents from these folders
 
-### 5. Deploy to Vercel
+### 5. Enable push notifications (optional)
+
+The app is a PWA that supports push notifications for inventory alerts (low stock / out of stock) and AI chat responses (when the tab is inactive or the response takes a while).
+
+1. Generate VAPID keys:
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+2. Add the keys to `.env.local`:
+   ```
+   NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public key from above>
+   VAPID_PRIVATE_KEY=<private key from above>
+   VAPID_SUBJECT=mailto:you@example.com
+   ```
+3. Run migration `013_push_subscriptions.sql` in the Supabase SQL Editor (if you haven't already from step 1)
+4. In the app, go to **Settings → Push Notifications** and click **Enable Notifications**
+5. Use the toggles to control which notification types you receive (inventory alerts, chat responses)
+
+> **Note:** Push notifications require HTTPS in production. `localhost` works for development in most browsers. If using the app as a PWA (installed to home screen), notifications will work even when the browser is closed.
+
+### 6. Deploy to Vercel
 
 1. Push to GitHub and import the repo in [Vercel](https://vercel.com)
 2. Add all `.env.local` variables as Vercel environment variables
 3. Update `GOOGLE_REDIRECT_URI` to your production callback URL
 4. Generate a random `CRON_SECRET` and `DASHBOARD_PASSWORD` and add both to Vercel env vars. Add `CRON_SECRET` to GitHub repo secrets too
 
-### 6. Enable GitHub Actions cron
+### 7. Enable GitHub Actions cron
 
 Add these secrets to your GitHub repo (**Settings → Secrets and variables → Actions**):
 
@@ -136,9 +158,9 @@ A stub workflow for monthly tax prep (`.github/workflows/tax-filing.yml`) also e
 
 You can also trigger syncs manually from the GitHub Actions tab or from the **Settings** page in the app (no secret prompt needed — uses your login session).
 
-### 7. Set up inventory tracking
+### 8. Set up inventory tracking
 
-Inventory is tracked at the **ingredient level** using data from xtraCHEF recipes. After syncing recipes (step 8), all raw ingredients appear on the **Inventory** page.
+Inventory is tracked at the **ingredient level** using data from xtraCHEF recipes. After syncing recipes (step 9), all raw ingredients appear on the **Inventory** page.
 
 #### Configure ingredients
 
@@ -170,7 +192,7 @@ After each Toast sync, the app automatically calculates **expected inventory** f
 
 When expected inventory drops below par level, the row is highlighted red and an alert is created on the **Alerts** page.
 
-### 8. Sync xtraCHEF recipes (optional)
+### 9. Sync xtraCHEF recipes (optional)
 
 Imports recipes, prep recipes, and ingredients from xtraCHEF (Toast's recipe management tool). This uses xtraCHEF's internal API — there's no public API, so you need a Bearer token from a logged-in browser session.
 
@@ -203,6 +225,7 @@ Imports recipes, prep recipes, and ingredients from xtraCHEF (Toast's recipe man
 | **2 — QBO + Sales Tax** | Stubbed | QuickBooks journal entries, NYC ST-100 tax worksheet, monthly filing reminders |
 | **3 — Sling + Payroll** | Stubbed | AI scheduling, time entry tracking, payroll pre-fill |
 | **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling, vector-based document search with embedding cache |
+| **PWA + Push Notifications** | Done | Installable PWA, push notifications for inventory alerts and AI chat responses, per-user notification preferences, nav alert badge |
 | **Google Workspace** | Done | Drive + Gmail sync, document chunking + vector embeddings, semantic document search, AI-powered PDF extraction |
 
 ## Project Structure
@@ -217,7 +240,7 @@ app/
   menu/sales/             Menu item sales analytics with date filtering, sorting, and category grouping
   gift-cards/             Gift card balance and liability tracking
   chat/                   Conversational AI interface
-  settings/               Integration status, Google connect, xtraCHEF token, sync history
+  settings/               Integration status, push notifications, Google connect, xtraCHEF token, sync history
   tax/                    Sales tax worksheet (Phase 2)
   bookkeeping/            QBO journal entries (Phase 2)
   schedule/               AI scheduling (Phase 3)
@@ -230,6 +253,7 @@ app/
     sync/google/          Google Drive sync endpoint
     sync/gmail/           Gmail sync endpoint
     sync/xtrachef/        xtraCHEF recipe sync endpoint
+    notifications/        Push subscription management + notification preferences
     inventory/            Inventory CRUD, manual counts, expected recalculation
     menu-sales/           Menu sales aggregation with date filtering + item normalization
     recipes/[id]/         Recipe detail editing (on_menu, creator, created_at_label, refrigerate)
@@ -242,6 +266,7 @@ lib/
   auth/                   Session token (HMAC-SHA256) + request verification
   integrations/           Toast, Google, xtraCHEF, QBO, Sling API clients
   inventory/              Expected inventory calculation engine
+  notifications/          Push notification sending (web-push) + client-side SW registration
   sync/                   Toast order sync + xtraCHEF recipe sync logic
   menu-sales/             Date range presets, filtering, item normalization, and case computation
   units.ts                Unit conversion (ml/oz/volume/weight + purchase units)
