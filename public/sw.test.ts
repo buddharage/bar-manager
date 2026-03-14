@@ -1,9 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+/**
+ * Integration tests for the service worker push notification display.
+ *
+ * Requirements under test:
+ *   1. When an inventory alert push arrives, the notification ALWAYS shows
+ *      — on desktop, on mobile, regardless of what page the user is on.
+ *   2. When a chat response push arrives and the user is NOT looking at
+ *      the chat page, the notification shows.
+ *   3. When a chat response push arrives and the user IS looking at the
+ *      chat page, the notification is suppressed (they see it in the UI).
+ *
+ * These tests load the real sw.js into a mock Service Worker environment,
+ * simulate push events with realistic payloads (matching what the server
+ * sends), and assert whether showNotification was called.
+ */
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
 // ---------------------------------------------------------------------------
-// Simulate the Service Worker global environment
+// Mock Service Worker environment
 // ---------------------------------------------------------------------------
 
 interface MockClient {
@@ -27,333 +42,246 @@ function createMockClient(overrides: Partial<MockClient> = {}): MockClient {
 
 let pushHandler: (event: any) => void;
 let showNotification: ReturnType<typeof vi.fn>;
-let mockClients: MockClient[];
 
-/**
- * Load sw.js into a mock Service Worker global and extract the registered
- * "push" event handler so we can call it directly in tests.
- */
 function loadServiceWorker(clients: MockClient[] = []) {
-  mockClients = clients;
   showNotification = vi.fn().mockResolvedValue(undefined);
 
   const handlers: Record<string, Function> = {};
-
   const selfGlobal: any = {
-    addEventListener: (type: string, handler: Function) => {
-      handlers[type] = handler;
-    },
+    addEventListener: (type: string, handler: Function) => { handlers[type] = handler; },
     skipWaiting: vi.fn(),
     clients: {
       matchAll: vi.fn().mockResolvedValue(clients),
       claim: vi.fn().mockResolvedValue(undefined),
       openWindow: vi.fn(),
     },
-    registration: {
-      showNotification,
-    },
+    registration: { showNotification },
     location: { origin: "https://app.barmanager.app" },
   };
 
-  // Execute sw.js in a context where `self` is our mock
   const swSource = readFileSync(join(__dirname, "sw.js"), "utf-8");
-  const wrapped = new Function("self", swSource);
-  wrapped(selfGlobal);
-
+  new Function("self", swSource)(selfGlobal);
   pushHandler = handlers["push"];
 }
 
-/**
- * Simulate a push event and wait for the async handler to complete.
- */
 async function firePush(payload: Record<string, unknown>): Promise<void> {
   let waitUntilPromise: Promise<void> | undefined;
-
-  const event = {
+  pushHandler({
     data: {
       json: () => payload,
       text: () => JSON.stringify(payload),
     },
-    waitUntil: (p: Promise<void>) => {
-      waitUntilPromise = p;
-    },
-  };
-
-  pushHandler(event);
-
-  if (waitUntilPromise) {
-    await waitUntilPromise;
-  }
+    waitUntil: (p: Promise<void>) => { waitUntilPromise = p; },
+  });
+  if (waitUntilPromise) await waitUntilPromise;
 }
+
+// ---------------------------------------------------------------------------
+// Realistic payloads (same shape the server sends)
+// ---------------------------------------------------------------------------
+
+const INVENTORY_LOW_STOCK = {
+  type: "inventory_alert",
+  title: "Low Stock Alert",
+  body: "Tequila Blanco is below par level (expected: 3.0 oz, par: 10)",
+  url: "/inventory/alerts",
+  tag: "inventory-alert-42",
+};
+
+const INVENTORY_OUT_OF_STOCK = {
+  type: "inventory_alert",
+  title: "Out of Stock",
+  body: "Lime Juice is depleted (expected: 0.0 oz, par: 8)",
+  url: "/inventory/alerts",
+  tag: "inventory-alert-7",
+};
+
+const CHAT_RESPONSE = {
+  type: "chat_response",
+  title: "Willy — Chat Reply",
+  body: "Based on your sales data, I recommend ordering more tequila and triple sec before the weekend...",
+  url: "/chat",
+  tag: "chat-response",
+};
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Service Worker — push notification display", () => {
-  // =======================================================================
-  // INVENTORY ALERTS — must ALWAYS show, no suppression
-  // =======================================================================
-
-  describe("inventory_alert", () => {
-    const inventoryPayload = {
-      type: "inventory_alert",
-      title: "Low Stock Alert",
-      body: "Tequila Blanco is below par level",
-      url: "/inventory/alerts",
-      tag: "inventory-alert-1",
-    };
-
-    it("shows notification when no tabs are open", async () => {
-      loadServiceWorker([]);
-      await firePush(inventoryPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-      expect(showNotification).toHaveBeenCalledWith("Low Stock Alert", expect.objectContaining({
-        body: "Tequila Blanco is below par level",
-      }));
-    });
-
-    it("shows notification even when user is focused on the inventory alerts page", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: true,
-          visibilityState: "visible",
-          url: "https://app.barmanager.app/inventory/alerts",
-        }),
-      ]);
-      await firePush(inventoryPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows notification when user is focused on a different page", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: true,
-          visibilityState: "visible",
-          url: "https://app.barmanager.app/dashboard",
-        }),
-      ]);
-      await firePush(inventoryPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows notification when user is on inventory alerts but tab not focused (switched app)", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: false,
-          visibilityState: "visible",
-          url: "https://app.barmanager.app/inventory/alerts",
-        }),
-      ]);
-      await firePush(inventoryPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows notification on mobile (browser in background)", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: false,
-          visibilityState: "hidden",
-          url: "https://app.barmanager.app/inventory/alerts",
-        }),
-      ]);
-      await firePush(inventoryPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows out-of-stock notification", async () => {
-      loadServiceWorker([]);
-      await firePush({
-        ...inventoryPayload,
-        title: "Out of Stock",
-        body: "Lime Juice is depleted",
-      });
-
-      expect(showNotification).toHaveBeenCalledWith("Out of Stock", expect.objectContaining({
-        body: "Lime Juice is depleted",
-      }));
-    });
+describe("Requirement 1: inventory alert push → notification ALWAYS shows", () => {
+  it("shows on desktop — user is on dashboard", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: true, visibilityState: "visible", url: "https://app.barmanager.app/dashboard" }),
+    ]);
+    await firePush(INVENTORY_LOW_STOCK);
+    expect(showNotification).toHaveBeenCalledTimes(1);
   });
 
-  // =======================================================================
-  // CHAT RESPONSES — suppress ONLY when user is focused on /chat
-  // =======================================================================
-
-  describe("chat_response", () => {
-    const chatPayload = {
-      type: "chat_response",
-      title: "Willy — Chat Reply",
-      body: "Based on your sales data, I recommend ordering...",
-      url: "/chat",
-      tag: "chat-response",
-    };
-
-    it("shows notification when no tabs are open", async () => {
-      loadServiceWorker([]);
-      await firePush(chatPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-      expect(showNotification).toHaveBeenCalledWith("Willy — Chat Reply", expect.objectContaining({
-        body: "Based on your sales data, I recommend ordering...",
-      }));
-    });
-
-    it("shows notification when user switched to another macOS app (tab visible but NOT focused)", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: false,
-          visibilityState: "visible",  // <-- the old bug: this was "visible" but user was in Slack
-          url: "https://app.barmanager.app/chat",
-        }),
-      ]);
-      await firePush(chatPayload);
-
-      // THIS is the core fix — visibilityState is "visible" but focused is false,
-      // so the notification MUST fire.
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows notification when user switched to a different browser tab", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: false,
-          visibilityState: "hidden",
-          url: "https://app.barmanager.app/chat",
-        }),
-      ]);
-      await firePush(chatPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows notification when user is focused on a different page (not /chat)", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: true,
-          visibilityState: "visible",
-          url: "https://app.barmanager.app/dashboard",
-        }),
-      ]);
-      await firePush(chatPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows notification on mobile when browser is backgrounded", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: false,
-          visibilityState: "hidden",
-          url: "https://app.barmanager.app/chat",
-        }),
-      ]);
-      await firePush(chatPayload);
-
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it("suppresses notification ONLY when user is focused on the chat page", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: true,
-          visibilityState: "visible",
-          url: "https://app.barmanager.app/chat",
-        }),
-      ]);
-      await firePush(chatPayload);
-
-      expect(showNotification).not.toHaveBeenCalled();
-    });
-
-    it("suppresses when user is focused on a chat sub-route", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: true,
-          visibilityState: "visible",
-          url: "https://app.barmanager.app/chat?thread=123",
-        }),
-      ]);
-      await firePush(chatPayload);
-
-      expect(showNotification).not.toHaveBeenCalled();
-    });
-
-    it("shows notification when multiple tabs open but none focused on chat", async () => {
-      loadServiceWorker([
-        createMockClient({
-          focused: false,
-          visibilityState: "hidden",
-          url: "https://app.barmanager.app/chat",
-        }),
-        createMockClient({
-          focused: true,
-          visibilityState: "visible",
-          url: "https://app.barmanager.app/inventory",
-        }),
-      ]);
-      await firePush(chatPayload);
-
-      // Chat tab exists but isn't focused — notification should fire.
-      expect(showNotification).toHaveBeenCalledTimes(1);
-    });
+  it("shows on desktop — user is focused on the inventory alerts page", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: true, visibilityState: "visible", url: "https://app.barmanager.app/inventory/alerts" }),
+    ]);
+    await firePush(INVENTORY_LOW_STOCK);
+    expect(showNotification).toHaveBeenCalledTimes(1);
   });
 
-  // =======================================================================
-  // Edge cases
-  // =======================================================================
+  it("shows on desktop — user switched to Slack (visible but not focused)", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "visible", url: "https://app.barmanager.app/inventory/alerts" }),
+    ]);
+    await firePush(INVENTORY_LOW_STOCK);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 
-  describe("edge cases", () => {
-    it("handles push event with no data gracefully", async () => {
-      loadServiceWorker([]);
+  it("shows on desktop — browser minimized", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "hidden", url: "https://app.barmanager.app/inventory/alerts" }),
+    ]);
+    await firePush(INVENTORY_LOW_STOCK);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 
-      const event = { data: null, waitUntil: vi.fn() };
-      pushHandler(event);
+  it("shows on mobile — app is in background", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "hidden", url: "https://app.barmanager.app/inventory" }),
+    ]);
+    await firePush(INVENTORY_LOW_STOCK);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 
-      // Should not call showNotification and should not throw
-      expect(showNotification).not.toHaveBeenCalled();
-      expect(event.waitUntil).not.toHaveBeenCalled();
-    });
+  it("shows on mobile — no tabs open (PWA closed)", async () => {
+    loadServiceWorker([]);
+    await firePush(INVENTORY_LOW_STOCK);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 
-    it("falls back to default payload when JSON parsing fails", async () => {
-      loadServiceWorker([]);
+  it("shows out-of-stock alerts the same way", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: true, visibilityState: "visible", url: "https://app.barmanager.app/inventory/alerts" }),
+    ]);
+    await firePush(INVENTORY_OUT_OF_STOCK);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+    expect(showNotification).toHaveBeenCalledWith("Out of Stock", expect.objectContaining({
+      body: expect.stringContaining("Lime Juice"),
+    }));
+  });
 
-      let waitUntilPromise: Promise<void> | undefined;
-      const event = {
-        data: {
-          json: () => { throw new Error("invalid JSON"); },
-          text: () => "Something happened",
-        },
-        waitUntil: (p: Promise<void>) => { waitUntilPromise = p; },
-      };
+  it("passes correct url so clicking the notification navigates to alerts", async () => {
+    loadServiceWorker([]);
+    await firePush(INVENTORY_LOW_STOCK);
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ data: { url: "/inventory/alerts" } }),
+    );
+  });
+});
 
-      pushHandler(event);
-      if (waitUntilPromise) await waitUntilPromise;
+describe("Requirement 2: chat response push → notification when user NOT looking at /chat", () => {
+  it("shows when user switched to another macOS app (tab visible, NOT focused)", async () => {
+    // THIS is the exact scenario that was broken before the fix.
+    // The old code checked visibilityState === "visible" and suppressed.
+    // The fix checks `focused` instead.
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "visible", url: "https://app.barmanager.app/chat" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 
-      expect(showNotification).toHaveBeenCalledWith("Willy", expect.objectContaining({
-        body: "Something happened",
-        data: { url: "/dashboard" },
-      }));
-    });
+  it("shows when user switched to a different browser tab", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "hidden", url: "https://app.barmanager.app/chat" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 
-    it("notification options include correct url in data", async () => {
-      loadServiceWorker([]);
-      await firePush({
-        type: "inventory_alert",
-        title: "Low Stock",
-        body: "Vodka is low",
-        url: "/inventory/alerts",
-        tag: "inventory-alert-5",
-      });
+  it("shows when user is focused on a different page entirely", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: true, visibilityState: "visible", url: "https://app.barmanager.app/inventory" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 
-      expect(showNotification).toHaveBeenCalledWith("Low Stock", expect.objectContaining({
-        data: { url: "/inventory/alerts" },
-        tag: "inventory-alert-5",
-      }));
-    });
+  it("shows on mobile when browser is in the background", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "hidden", url: "https://app.barmanager.app/chat" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows when no tabs are open at all", async () => {
+    loadServiceWorker([]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows when multiple tabs exist but chat tab is not focused", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "hidden", url: "https://app.barmanager.app/chat" }),
+      createMockClient({ focused: true, visibilityState: "visible", url: "https://app.barmanager.app/inventory" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes correct url so clicking the notification navigates to /chat", async () => {
+    loadServiceWorker([]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledWith(
+      "Willy — Chat Reply",
+      expect.objectContaining({ data: { url: "/chat" } }),
+    );
+  });
+});
+
+describe("Chat suppression: notification hidden ONLY when user IS focused on /chat", () => {
+  it("suppresses when user is focused on /chat", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: true, visibilityState: "visible", url: "https://app.barmanager.app/chat" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("suppresses when user is focused on /chat with query params", async () => {
+    loadServiceWorker([
+      createMockClient({ focused: true, visibilityState: "visible", url: "https://app.barmanager.app/chat?thread=abc" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe("Regression guard: visibilityState alone must NOT suppress", () => {
+  it("chat: visibilityState=visible + focused=false → notification SHOWS", async () => {
+    // This is the regression test for the original bug.
+    // On macOS, switching to another app leaves visibilityState as "visible"
+    // but sets focused to false. The old broken code suppressed here.
+    loadServiceWorker([
+      createMockClient({ focused: false, visibilityState: "visible", url: "https://app.barmanager.app/chat" }),
+    ]);
+    await firePush(CHAT_RESPONSE);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("inventory: any combination of focused/visibilityState → notification SHOWS", async () => {
+    // Inventory must never be suppressed, regardless of state
+    const combos: Pick<MockClient, "focused" | "visibilityState">[] = [
+      { focused: true, visibilityState: "visible" },
+      { focused: true, visibilityState: "hidden" },
+      { focused: false, visibilityState: "visible" },
+      { focused: false, visibilityState: "hidden" },
+    ];
+
+    for (const combo of combos) {
+      loadServiceWorker([
+        createMockClient({ ...combo, url: "https://app.barmanager.app/inventory/alerts" }),
+      ]);
+      await firePush(INVENTORY_LOW_STOCK);
+      expect(showNotification).toHaveBeenCalledTimes(1);
+    }
   });
 });

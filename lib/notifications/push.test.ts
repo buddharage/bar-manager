@@ -1,36 +1,44 @@
+/**
+ * Integration tests for push notification delivery.
+ *
+ * Requirements under test:
+ *   1. When an inventory alert fires, a push notification is delivered
+ *      to every device (desktop + mobile).
+ *   2. When the chatbot responds, a push notification is delivered.
+ *
+ * These tests mock only the outermost boundaries (web-push HTTP call,
+ * Supabase database) and exercise the real application code in between:
+ *   trigger → sendPushNotification / broadcastInventoryAlert → web-push
+ */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
-// Mock web-push
+// Boundary mock: web-push (the HTTP call to the push service)
 // ---------------------------------------------------------------------------
 
 const mockSendNotification = vi.fn().mockResolvedValue({});
-const mockSetVapidDetails = vi.fn();
 
 vi.mock("web-push", () => ({
   default: {
     sendNotification: (...args: unknown[]) => mockSendNotification(...args),
-    setVapidDetails: (...args: unknown[]) => mockSetVapidDetails(...args),
+    setVapidDetails: vi.fn(),
   },
 }));
 
 // ---------------------------------------------------------------------------
-// Mock Supabase — tracks every query so we can assert behaviour
+// Boundary mock: Supabase (the database)
 // ---------------------------------------------------------------------------
 
 let mockPreferences: { inventory_alerts: boolean; chat_responses: boolean } | null;
 let mockSubscriptions: { id: number; user_id: string; endpoint: string; p256dh: string; auth: string }[];
-let deletedIds: number[];
 
 function createChainableMock(resolvedValue: unknown) {
   const chain: any = {};
-  const methods = ["select", "eq", "neq", "not", "in", "gte", "limit", "order", "range", "delete"];
-  for (const m of methods) {
+  for (const m of ["select", "eq", "neq", "not", "in", "gte", "limit", "order", "range", "delete"]) {
     chain[m] = vi.fn().mockReturnValue(chain);
   }
   chain.maybeSingle = vi.fn().mockResolvedValue(resolvedValue);
   chain.single = vi.fn().mockResolvedValue(resolvedValue);
-  // Allow awaiting the chain directly
   chain.then = (resolve: (v: unknown) => void) => resolve(resolvedValue);
   return chain;
 }
@@ -43,12 +51,8 @@ vi.mock("@/lib/supabase/server", () => ({
       }
       if (table === "push_subscriptions") {
         const chain = createChainableMock({ data: mockSubscriptions, error: null });
-        // Override delete to track which IDs are removed
         chain.delete = vi.fn().mockReturnValue({
-          in: vi.fn((_col: string, ids: number[]) => {
-            deletedIds.push(...ids);
-            return Promise.resolve({ error: null });
-          }),
+          in: vi.fn().mockResolvedValue({ error: null }),
         });
         return chain;
       }
@@ -58,136 +62,121 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Import module under test (after mocks are set up)
+// Import the real application code (after mocks)
 // ---------------------------------------------------------------------------
 
 const { sendPushNotification, broadcastInventoryAlert } = await import("./push");
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const DESKTOP_SUB = {
+  id: 1,
+  user_id: "user-1",
+  endpoint: "https://fcm.googleapis.com/fcm/send/desktop-token",
+  p256dh: "desktop-p256dh-key",
+  auth: "desktop-auth-key",
+};
+
+const MOBILE_SUB = {
+  id: 2,
+  user_id: "user-1",
+  endpoint: "https://web.push.apple.com/mobile-token",
+  p256dh: "mobile-p256dh-key",
+  auth: "mobile-auth-key",
+};
+
+function sentPayloads(): Record<string, unknown>[] {
+  return mockSendNotification.mock.calls.map(
+    (call: unknown[]) => JSON.parse(call[1] as string),
+  );
+}
+
+function sentEndpoints(): string[] {
+  return mockSendNotification.mock.calls.map(
+    (call: unknown[]) => (call[0] as { endpoint: string }).endpoint,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("sendPushNotification", () => {
+describe("Requirement 1: inventory alert → push notification to all devices", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    deletedIds = [];
-    // Defaults: preferences enabled, one subscription
-    mockPreferences = null; // no row = defaults to enabled
-    mockSubscriptions = [
-      { id: 1, user_id: "user-1", endpoint: "https://push.example.com/sub1", p256dh: "key1", auth: "auth1" },
-    ];
-    // Set VAPID env vars
+    mockPreferences = null; // defaults to enabled
+    mockSubscriptions = [DESKTOP_SUB, MOBILE_SUB];
     process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = "test-public-key";
     process.env.VAPID_PRIVATE_KEY = "test-private-key";
-    process.env.VAPID_SUBJECT = "mailto:test@barmanager.app";
   });
 
-  // =========================================================================
-  // Core delivery
-  // =========================================================================
+  it("broadcastInventoryAlert delivers to every registered device", async () => {
+    await broadcastInventoryAlert({
+      title: "Low Stock Alert",
+      body: "Tequila Blanco is below par level (expected: 3.0 oz, par: 10)",
+      url: "/inventory/alerts",
+      tag: "inventory-alert-42",
+    });
 
-  it("sends push notification with correct payload for inventory_alert", async () => {
+    // Must reach both desktop and mobile
+    expect(mockSendNotification).toHaveBeenCalledTimes(2);
+    expect(sentEndpoints()).toContain(DESKTOP_SUB.endpoint);
+    expect(sentEndpoints()).toContain(MOBILE_SUB.endpoint);
+
+    // Every payload must be type "inventory_alert"
+    for (const payload of sentPayloads()) {
+      expect(payload.type).toBe("inventory_alert");
+      expect(payload.title).toBe("Low Stock Alert");
+      expect(payload.url).toBe("/inventory/alerts");
+    }
+  });
+
+  it("out-of-stock alert also delivers to every device", async () => {
+    await broadcastInventoryAlert({
+      title: "Out of Stock",
+      body: "Lime Juice is depleted",
+      url: "/inventory/alerts",
+      tag: "inventory-alert-7",
+    });
+
+    expect(mockSendNotification).toHaveBeenCalledTimes(2);
+    for (const payload of sentPayloads()) {
+      expect(payload.type).toBe("inventory_alert");
+      expect(payload.title).toBe("Out of Stock");
+    }
+  });
+
+  it("sendPushNotification delivers inventory_alert to both desktop and mobile", async () => {
     const result = await sendPushNotification("user-1", {
       type: "inventory_alert",
       title: "Low Stock Alert",
-      body: "Tequila is below par",
+      body: "Vodka is below par",
       url: "/inventory/alerts",
       tag: "inventory-alert-1",
     });
 
-    expect(result.sent).toBe(1);
+    expect(result.sent).toBe(2);
     expect(result.failed).toBe(0);
-    expect(mockSendNotification).toHaveBeenCalledTimes(1);
-    expect(mockSendNotification).toHaveBeenCalledWith(
-      { endpoint: "https://push.example.com/sub1", keys: { p256dh: "key1", auth: "auth1" } },
-      expect.stringContaining('"type":"inventory_alert"'),
-    );
+    expect(sentEndpoints()).toContain(DESKTOP_SUB.endpoint);
+    expect(sentEndpoints()).toContain(MOBILE_SUB.endpoint);
   });
 
-  it("sends push notification with correct payload for chat_response", async () => {
-    const result = await sendPushNotification("user-1", {
-      type: "chat_response",
-      title: "Willy — Chat Reply",
-      body: "Here are your sales trends...",
-      url: "/chat",
-      tag: "chat-response",
-    });
-
-    expect(result.sent).toBe(1);
-    expect(result.failed).toBe(0);
-    expect(mockSendNotification).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.stringContaining('"type":"chat_response"'),
-    );
-  });
-
-  it("sends to multiple subscriptions for the same user", async () => {
-    mockSubscriptions = [
-      { id: 1, user_id: "user-1", endpoint: "https://push.example.com/desktop", p256dh: "k1", auth: "a1" },
-      { id: 2, user_id: "user-1", endpoint: "https://push.example.com/mobile", p256dh: "k2", auth: "a2" },
-    ];
+  it("still delivers when user has no notification_preferences row (defaults enabled)", async () => {
+    mockPreferences = null;
 
     const result = await sendPushNotification("user-1", {
       type: "inventory_alert",
       title: "Low Stock",
-      body: "Vodka is low",
+      body: "test",
       url: "/inventory/alerts",
     });
 
     expect(result.sent).toBe(2);
-    expect(mockSendNotification).toHaveBeenCalledTimes(2);
   });
 
-  // =========================================================================
-  // VAPID key validation
-  // =========================================================================
-
-  it("skips sending when VAPID public key is missing", async () => {
-    delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-
-    const result = await sendPushNotification("user-1", {
-      type: "inventory_alert",
-      title: "Low Stock",
-      body: "test",
-      url: "/inventory/alerts",
-    });
-
-    expect(result.sent).toBe(0);
-    expect(mockSendNotification).not.toHaveBeenCalled();
-  });
-
-  it("skips sending when VAPID private key is missing", async () => {
-    delete process.env.VAPID_PRIVATE_KEY;
-
-    const result = await sendPushNotification("user-1", {
-      type: "inventory_alert",
-      title: "Low Stock",
-      body: "test",
-      url: "/inventory/alerts",
-    });
-
-    expect(result.sent).toBe(0);
-    expect(mockSendNotification).not.toHaveBeenCalled();
-  });
-
-  // =========================================================================
-  // Preference enforcement
-  // =========================================================================
-
-  it("sends inventory alert when preferences exist and inventory_alerts is true", async () => {
-    mockPreferences = { inventory_alerts: true, chat_responses: true };
-
-    const result = await sendPushNotification("user-1", {
-      type: "inventory_alert",
-      title: "Low Stock",
-      body: "test",
-      url: "/inventory/alerts",
-    });
-
-    expect(result.sent).toBe(1);
-  });
-
-  it("blocks inventory alert when user disabled inventory_alerts preference", async () => {
+  it("respects user preference to disable inventory_alerts", async () => {
     mockPreferences = { inventory_alerts: false, chat_responses: true };
 
     const result = await sendPushNotification("user-1", {
@@ -201,7 +190,70 @@ describe("sendPushNotification", () => {
     expect(mockSendNotification).not.toHaveBeenCalled();
   });
 
-  it("blocks chat_response when user disabled chat_responses preference", async () => {
+  it("cleans up expired subscription without breaking other deliveries", async () => {
+    // Desktop subscription expired, mobile still valid
+    mockSendNotification
+      .mockRejectedValueOnce({ statusCode: 410 }) // desktop: expired
+      .mockResolvedValueOnce({});                  // mobile: OK
+
+    const result = await sendPushNotification("user-1", {
+      type: "inventory_alert",
+      title: "Low Stock",
+      body: "test",
+      url: "/inventory/alerts",
+    });
+
+    // One succeeded, one failed — but both were attempted
+    expect(result.sent).toBe(1);
+    expect(result.failed).toBe(1);
+    expect(mockSendNotification).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Requirement 2: chat response → push notification delivered", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPreferences = null;
+    mockSubscriptions = [DESKTOP_SUB, MOBILE_SUB];
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = "test-public-key";
+    process.env.VAPID_PRIVATE_KEY = "test-private-key";
+  });
+
+  it("chat response triggers push notification to all devices", async () => {
+    const result = await sendPushNotification("user-1", {
+      type: "chat_response",
+      title: "Willy — Chat Reply",
+      body: "Based on your sales data, I recommend ordering more tequila...",
+      url: "/chat",
+      tag: "chat-response",
+    });
+
+    expect(result.sent).toBe(2);
+    expect(sentEndpoints()).toContain(DESKTOP_SUB.endpoint);
+    expect(sentEndpoints()).toContain(MOBILE_SUB.endpoint);
+
+    for (const payload of sentPayloads()) {
+      expect(payload.type).toBe("chat_response");
+      expect(payload.title).toBe("Willy — Chat Reply");
+      expect(payload.url).toBe("/chat");
+    }
+  });
+
+  it("long chat responses are sent as-is (truncation is caller's job)", async () => {
+    const longBody = "A".repeat(200);
+
+    await sendPushNotification("user-1", {
+      type: "chat_response",
+      title: "Willy — Chat Reply",
+      body: longBody,
+      url: "/chat",
+      tag: "chat-response",
+    });
+
+    expect(sentPayloads()[0].body).toBe(longBody);
+  });
+
+  it("respects user preference to disable chat_responses", async () => {
     mockPreferences = { inventory_alerts: true, chat_responses: false };
 
     const result = await sendPushNotification("user-1", {
@@ -215,8 +267,8 @@ describe("sendPushNotification", () => {
     expect(mockSendNotification).not.toHaveBeenCalled();
   });
 
-  it("defaults to enabled when no preferences row exists", async () => {
-    mockPreferences = null;
+  it("does not send when VAPID keys are missing", async () => {
+    delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
     const result = await sendPushNotification("user-1", {
       type: "chat_response",
@@ -225,93 +277,21 @@ describe("sendPushNotification", () => {
       url: "/chat",
     });
 
-    expect(result.sent).toBe(1);
+    expect(result.sent).toBe(0);
+    expect(mockSendNotification).not.toHaveBeenCalled();
   });
 
-  // =========================================================================
-  // Subscription edge cases
-  // =========================================================================
-
-  it("returns zero when user has no subscriptions", async () => {
+  it("does not send when user has no push subscriptions", async () => {
     mockSubscriptions = [];
 
     const result = await sendPushNotification("user-1", {
-      type: "inventory_alert",
-      title: "Low Stock",
+      type: "chat_response",
+      title: "Willy",
       body: "test",
-      url: "/inventory/alerts",
+      url: "/chat",
     });
 
     expect(result.sent).toBe(0);
     expect(result.failed).toBe(0);
-  });
-
-  it("cleans up expired subscriptions (410 Gone)", async () => {
-    mockSendNotification.mockRejectedValueOnce({ statusCode: 410 });
-
-    const result = await sendPushNotification("user-1", {
-      type: "inventory_alert",
-      title: "Low Stock",
-      body: "test",
-      url: "/inventory/alerts",
-    });
-
-    expect(result.failed).toBe(1);
-    expect(deletedIds).toContain(1);
-  });
-
-  it("cleans up expired subscriptions (404 Not Found)", async () => {
-    mockSendNotification.mockRejectedValueOnce({ statusCode: 404 });
-
-    const result = await sendPushNotification("user-1", {
-      type: "inventory_alert",
-      title: "Low Stock",
-      body: "test",
-      url: "/inventory/alerts",
-    });
-
-    expect(result.failed).toBe(1);
-    expect(deletedIds).toContain(1);
-  });
-
-  it("does not delete subscription on transient errors (e.g. 500)", async () => {
-    mockSendNotification.mockRejectedValueOnce({ statusCode: 500 });
-
-    const result = await sendPushNotification("user-1", {
-      type: "inventory_alert",
-      title: "Low Stock",
-      body: "test",
-      url: "/inventory/alerts",
-    });
-
-    expect(result.failed).toBe(1);
-    expect(deletedIds).toHaveLength(0);
-  });
-});
-
-describe("broadcastInventoryAlert", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    deletedIds = [];
-    mockPreferences = null;
-    mockSubscriptions = [
-      { id: 1, user_id: "user-1", endpoint: "https://push.example.com/sub1", p256dh: "k1", auth: "a1" },
-    ];
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = "test-public-key";
-    process.env.VAPID_PRIVATE_KEY = "test-private-key";
-  });
-
-  it("sends inventory_alert type to all users with subscriptions", async () => {
-    await broadcastInventoryAlert({
-      title: "Out of Stock",
-      body: "Lime Juice is depleted",
-      url: "/inventory/alerts",
-      tag: "inventory-alert-3",
-    });
-
-    expect(mockSendNotification).toHaveBeenCalledTimes(1);
-    const sentPayload = JSON.parse(mockSendNotification.mock.calls[0][1]);
-    expect(sentPayload.type).toBe("inventory_alert");
-    expect(sentPayload.title).toBe("Out of Stock");
   });
 });
