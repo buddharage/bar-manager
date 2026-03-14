@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#1a1a2e"/>
+  <circle cx="256" cy="256" r="224" fill="#16213e" stroke="#e94560" stroke-width="6"/>
+
+  <!-- Demon horns -->
+  <path d="M144 176 L112 64 L176 144 Z" fill="#e94560"/>
+  <path d="M368 176 L400 64 L336 144 Z" fill="#e94560"/>
+
+  <!-- Head shape -->
+  <ellipse cx="256" cy="240" rx="112" ry="120" fill="#7b2d8e"/>
+
+  <!-- Glowing eyes -->
+  <ellipse cx="208" cy="216" rx="28" ry="20" fill="#ff0" opacity="0.9"/>
+  <ellipse cx="304" cy="216" rx="28" ry="20" fill="#ff0" opacity="0.9"/>
+  <ellipse cx="208" cy="216" rx="12" ry="16" fill="#e94560"/>
+  <ellipse cx="304" cy="216" rx="12" ry="16" fill="#e94560"/>
+
+  <!-- Pointed ears -->
+  <path d="M144 208 L80 160 L136 240 Z" fill="#7b2d8e"/>
+  <path d="M368 208 L432 160 L376 240 Z" fill="#7b2d8e"/>
+
+  <!-- Sinister grin -->
+  <path d="M184 288 Q216 336 256 320 Q296 336 328 288" stroke="#e94560" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <!-- Fangs -->
+  <path d="M208 296 L200 328 L224 304" fill="#fff"/>
+  <path d="M304 296 L312 328 L288 304" fill="#fff"/>
+
+  <!-- Cocktail shaker in hand -->
+  <rect x="336" y="304" width="64" height="128" rx="16" fill="#c0c0c0" opacity="0.9"/>
+  <rect x="352" y="288" width="32" height="24" rx="8" fill="#d4d4d4"/>
+  <rect x="360" y="264" width="16" height="32" rx="8" fill="#d4d4d4"/>
+  <!-- Shaker shine -->
+  <line x1="352" y1="336" x2="352" y2="400" stroke="#fff" stroke-width="4" opacity="0.5"/>
+
+  <!-- Bowtie -->
+  <path d="M224 352 L256 368 L288 352 L256 384 Z" fill="#e94560"/>
+
+  <!-- "WILLY" text at bottom -->
+  <text x="256" y="448" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="48" fill="#e94560" letter-spacing="8">WILLY</text>
+</svg>

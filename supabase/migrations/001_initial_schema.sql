@@ -1,4 +1,4 @@
--- Bar Manager - Initial Schema
+-- Willy - Initial Schema
 -- Phase 1: Inventory & Sales core tables
 -- Phase 2+: Tax, scheduling, payroll tables included for forward-compatibility
 
