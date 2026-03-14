@@ -17,10 +17,22 @@ import {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 const BASE_SYSTEM_INSTRUCTION = `You are an AI assistant for a 50-seat cocktail bar in Brooklyn, NY.
-You help with inventory management, sales analysis, scheduling, and general bar operations.
+You help with inventory management, sales analysis, recipes, scheduling, and general bar operations.
 You have access to tools to query the bar's database. Use them to answer questions with real data.
 You can search Gmail live for receipts, invoices, and order confirmations using the search_gmail tool.
 Relevant documents from Google Drive are automatically provided as context below when available.
+
+Available data you can query:
+- Recipes & their ingredients (cocktails, dishes, prep recipes — with on-menu status, pricing, food cost)
+- Ingredients (xtraCHEF-synced stock levels, par levels, expected quantities)
+- Inventory items (Toast POS stock levels)
+- Daily sales & top-selling menu items
+- Inventory alerts (low stock, out of stock, overstock)
+- Gift cards (balances, status)
+- Employees & time entries (staff, hours, tips)
+- Tax periods (sales tax data)
+- Google Drive documents & Gmail
+
 Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.`;
 
 // Tool definitions for Gemini function calling
@@ -139,6 +151,108 @@ const tools: Tool[] = [
             },
           },
           required: ["query"],
+        },
+      },
+      {
+        name: "query_recipes",
+        description:
+          "Get recipes (cocktails, dishes, prep recipes) with their ingredients. Can filter by on-menu status, type, recipe group, or search by name.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            on_menu: {
+              type: SchemaType.BOOLEAN,
+              description: "If true, only return recipes currently on the menu. If false, only off-menu recipes.",
+            },
+            type: {
+              type: SchemaType.STRING,
+              description: "Filter by recipe type: 'recipe' (cocktails/dishes) or 'prep_recipe' (batch/prep recipes)",
+            },
+            recipe_group: {
+              type: SchemaType.STRING,
+              description: "Filter by recipe group/category (e.g., 'House Cocktails', 'Classic Cocktails', 'Food')",
+            },
+            search: {
+              type: SchemaType.STRING,
+              description: "Search recipes by name (partial match)",
+            },
+          },
+        },
+      },
+      {
+        name: "query_ingredients",
+        description:
+          "Get ingredients (xtraCHEF-synced) with current stock quantities, par levels, and expected quantities. Different from Toast inventory_items.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            category: {
+              type: SchemaType.STRING,
+              description: "Filter by ingredient category",
+            },
+            low_stock_only: {
+              type: SchemaType.BOOLEAN,
+              description: "If true, only return ingredients where current_quantity <= par_level",
+            },
+            search: {
+              type: SchemaType.STRING,
+              description: "Search ingredients by name (partial match)",
+            },
+          },
+        },
+      },
+      {
+        name: "query_gift_cards",
+        description:
+          "Get gift card data including balances and status.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            status: {
+              type: SchemaType.STRING,
+              description: "Filter by status: 'active', 'depleted', 'expired', or 'voided'",
+            },
+          },
+        },
+      },
+      {
+        name: "query_employees",
+        description:
+          "Get employee information and optionally their time entries for a date range.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            active_only: {
+              type: SchemaType.BOOLEAN,
+              description: "If true, only return active employees (default true)",
+            },
+            include_time_entries: {
+              type: SchemaType.BOOLEAN,
+              description: "If true, include time entries. Requires start_date and end_date.",
+            },
+            start_date: {
+              type: SchemaType.STRING,
+              description: "Start date for time entries in YYYY-MM-DD format",
+            },
+            end_date: {
+              type: SchemaType.STRING,
+              description: "End date for time entries in YYYY-MM-DD format",
+            },
+          },
+        },
+      },
+      {
+        name: "query_tax_periods",
+        description:
+          "Get sales tax period data.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            status: {
+              type: SchemaType.STRING,
+              description: "Filter by status: 'pending', 'computed', or 'filed'",
+            },
+          },
         },
       },
     ],
@@ -297,6 +411,121 @@ async function executeTool(
 
       // search_gmail is not cached (always live) — setCachedToolResult is a no-op for it
       return results;
+    }
+
+    case "query_recipes": {
+      let query = supabase
+        .from("recipes")
+        .select("id, name, type, recipe_group, menu_price, prime_cost, food_cost_pct, on_menu, notes, instructions, image_url, serving_size, creator, created_at_label, refrigerate, recipe_ingredients(id, name, type, quantity, uom, cost)")
+        .order("type", { ascending: true })
+        .order("recipe_group", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (args.on_menu !== undefined) {
+        query = query.eq("on_menu", args.on_menu);
+      }
+      if (args.type) {
+        query = query.eq("type", args.type);
+      }
+      if (args.recipe_group) {
+        query = query.ilike("recipe_group", `%${args.recipe_group}%`);
+      }
+      if (args.search) {
+        query = query.ilike("name", `%${args.search}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
+    }
+
+    case "query_ingredients": {
+      let query = supabase
+        .from("ingredients")
+        .select("id, name, category, unit, current_quantity, par_level, expected_quantity, purchase_unit, purchase_unit_quantity, cost_per_unit, last_counted_at")
+        .order("name");
+
+      if (args.category) {
+        query = query.ilike("category", `%${args.category}%`);
+      }
+      if (args.search) {
+        query = query.ilike("name", `%${args.search}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const result = args.low_stock_only && data
+        ? data.filter((item) => item.par_level && item.current_quantity <= item.par_level)
+        : data;
+      setCachedToolResult(name, args, result);
+      return result;
+    }
+
+    case "query_gift_cards": {
+      let query = supabase
+        .from("gift_cards")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (args.status) {
+        query = query.eq("status", args.status);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
+    }
+
+    case "query_employees": {
+      const activeOnly = args.active_only !== false;
+      let empQuery = supabase
+        .from("employees")
+        .select("*")
+        .order("name");
+
+      if (activeOnly) {
+        empQuery = empQuery.eq("active", true);
+      }
+
+      const { data: employees, error: empError } = await empQuery;
+      if (empError) throw empError;
+
+      if (args.include_time_entries && args.start_date && args.end_date) {
+        const { data: timeEntries, error: teError } = await supabase
+          .from("time_entries")
+          .select("*")
+          .gte("date", args.start_date)
+          .lte("date", args.end_date)
+          .order("date");
+
+        if (teError) throw teError;
+
+        const result = { employees, time_entries: timeEntries };
+        setCachedToolResult(name, args, result);
+        return result;
+      }
+
+      setCachedToolResult(name, args, employees);
+      return employees;
+    }
+
+    case "query_tax_periods": {
+      let query = supabase
+        .from("tax_periods")
+        .select("*")
+        .order("period_start", { ascending: false });
+
+      if (args.status) {
+        query = query.eq("status", args.status);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
     }
 
     default:
