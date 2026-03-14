@@ -33,14 +33,22 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      // For chat notifications, suppress if the user is actively viewing the chat page.
+      // For chat notifications, suppress only if the user is focused on the
+      // chat page (they'll see the response appear in the UI).
+      // We use `focused` instead of `visibilityState === "visible"` because
+      // visibilityState stays "visible" even when the user switches to another
+      // OS application (e.g. Finder, Slack) — only tab switches or minimizing
+      // flip it to "hidden". `focused` correctly goes false when the browser
+      // loses focus, so the notification fires when the user is in another app.
       if (payload.type === "chat_response") {
         const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
         const chatFocused = clients.some(
-          (c) => c.visibilityState === "visible" && c.url.includes("/chat")
+          (c) => c.focused && c.url.includes("/chat")
         );
         if (chatFocused) return;
       }
+
+      // Inventory alerts always show — no suppression.
 
       await self.registration.showNotification(payload.title, options);
     })()
