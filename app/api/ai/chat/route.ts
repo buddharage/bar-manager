@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const userId = request.cookies.get("session")?.value?.split(".")[0] || "default";
     const preview = response.length > 100 ? response.slice(0, 100) + "..." : response;
 
-    let pushResult = { sent: 0, failed: 0, error: null as string | null };
+    let pushResult: { sent: number; failed: number; error?: string | null } = { sent: 0, failed: 0 };
     try {
       pushResult = await sendPushNotification(userId, {
         type: "chat_response",
