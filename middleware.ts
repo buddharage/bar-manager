@@ -23,6 +23,8 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
+    pathname === "/favicon.svg" ||
+    pathname.startsWith("/icon-") ||
     pathname === "/sw.js" ||
     pathname === "/manifest.json"
   ) {
