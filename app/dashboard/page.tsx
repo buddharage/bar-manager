@@ -234,7 +234,7 @@ export default function DashboardPage() {
       {!loading && !error && !hasAnySalesData && !hasAnyInventoryData && !lastSync && queryErrors.length === 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Welcome to Bar Manager</CardTitle>
+            <CardTitle>Welcome to Moe</CardTitle>
             <CardDescription>
               No data has been synced yet. Click below to pull the last 7 days of sales from Toast, or go to Settings to configure your account.
             </CardDescription>

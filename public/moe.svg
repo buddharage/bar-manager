@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="62" fill="#F5C16C"/>
+
+  <!-- Hair - grey, stringy, receding -->
+  <ellipse cx="64" cy="30" rx="38" ry="20" fill="#808080"/>
+  <path d="M26 30 Q28 55 32 60 L30 30Z" fill="#808080"/>
+  <path d="M102 30 Q100 55 96 60 L98 30Z" fill="#808080"/>
+  <!-- Stringy hair strands -->
+  <path d="M35 25 Q30 45 28 55" stroke="#6a6a6a" stroke-width="2" fill="none"/>
+  <path d="M93 25 Q98 45 100 55" stroke="#6a6a6a" stroke-width="2" fill="none"/>
+
+  <!-- Face shape - Moe's distinctive long face -->
+  <ellipse cx="64" cy="62" rx="32" ry="40" fill="#F5C16C"/>
+
+  <!-- Ears -->
+  <ellipse cx="30" cy="58" rx="8" ry="10" fill="#F5C16C"/>
+  <ellipse cx="30" cy="58" rx="5" ry="7" fill="#E8B05C"/>
+  <ellipse cx="98" cy="58" rx="8" ry="10" fill="#F5C16C"/>
+  <ellipse cx="98" cy="58" rx="5" ry="7" fill="#E8B05C"/>
+
+  <!-- Brow ridge - heavy, angry -->
+  <path d="M40 48 Q52 42 60 46" stroke="#8B7355" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <path d="M68 46 Q76 42 88 48" stroke="#8B7355" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Eyes - beady -->
+  <ellipse cx="52" cy="52" rx="6" ry="5" fill="white"/>
+  <ellipse cx="76" cy="52" rx="6" ry="5" fill="white"/>
+  <circle cx="53" cy="52" r="2.5" fill="black"/>
+  <circle cx="77" cy="52" r="2.5" fill="black"/>
+
+  <!-- Big, bulbous nose -->
+  <ellipse cx="64" cy="68" rx="10" ry="8" fill="#E8A84C"/>
+  <ellipse cx="60" cy="72" rx="3" ry="2" fill="#D4964A"/>
+  <ellipse cx="68" cy="72" rx="3" ry="2" fill="#D4964A"/>
+
+  <!-- Mouth - wide, frowning -->
+  <path d="M46 82 Q56 90 64 88 Q72 90 82 82" stroke="#5C3D2E" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- 5 o'clock shadow -->
+  <ellipse cx="64" cy="85" rx="22" ry="14" fill="#D4B06C" opacity="0.4"/>
+
+  <!-- Chin -->
+  <ellipse cx="64" cy="98" rx="12" ry="6" fill="#F5C16C"/>
+
+  <!-- Bartender bow tie -->
+  <polygon points="52,108 64,114 76,108 76,118 64,112 52,118" fill="#8B0000"/>
+  <circle cx="64" cy="113" r="3" fill="#A00000"/>
+</svg>
