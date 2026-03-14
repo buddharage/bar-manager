@@ -16,8 +16,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Moe",
   description: "AI-powered bar operations assistant",
+  manifest: "/manifest.json",
+  themeColor: "#0a0a0b",
   icons: {
     icon: "/moe.svg",
+    apple: "/icon-192.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Moe",
   },
 };
 
