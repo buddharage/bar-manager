@@ -31,7 +31,20 @@ self.addEventListener("push", (event) => {
     data: { url: payload.url || "/dashboard" },
   };
 
-  event.waitUntil(self.registration.showNotification(payload.title, options));
+  event.waitUntil(
+    (async () => {
+      // For chat notifications, suppress if the user is actively viewing the chat page.
+      if (payload.type === "chat_response") {
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        const chatFocused = clients.some(
+          (c) => c.visibilityState === "visible" && c.url.includes("/chat")
+        );
+        if (chatFocused) return;
+      }
+
+      await self.registration.showNotification(payload.title, options);
+    })()
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
