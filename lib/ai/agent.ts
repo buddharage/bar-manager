@@ -321,8 +321,19 @@ export async function chat(
   const embeddingStats = { cached: 0, computed: 0 };
   const lastMessage = messages[messages.length - 1];
 
+  // ── Inject current date so the model can resolve relative dates ──
+  const now = new Date();
+  const currentDate = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+  let systemInstruction = BASE_SYSTEM_INSTRUCTION +
+    `\nToday is ${currentDate}. Use this date to interpret relative time expressions like "last week", "this month", "yesterday", etc.`;
+
   // ── Auto-RAG: retrieve relevant Drive document chunks ──
-  let systemInstruction = BASE_SYSTEM_INSTRUCTION;
 
   try {
     const chunks = await findSimilarChunks(lastMessage.content, 5, 0.35, embeddingStats);
