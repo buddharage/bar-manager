@@ -14,18 +14,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bar Manager",
+  title: "Willy",
   description: "AI-powered bar operations assistant",
   manifest: "/manifest.json",
   themeColor: "#0a0a0b",
   icons: {
-    icon: "/favicon.png",
-    apple: "/icon-192.png",
+    icon: "/favicon.svg",
+    apple: "/icon-192.svg",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Bar Manager",
+    title: "Willy",
   },
 };
 

@@ -8,7 +8,7 @@
  * Auth: Requires a Bearer token from a logged-in xtraCHEF browser session.
  * The user copies the Authorization header value from any request to
  * ecs-api-prod.sa.toasttab.com in browser DevTools and pastes it
- * into the bar-manager Settings page (or XTRACHEF_TOKEN env var).
+ * into the Willy Settings page (or XTRACHEF_TOKEN env var).
  *
  * Endpoints (base: ecs-api-prod.sa.toasttab.com):
  *   Recipe list:

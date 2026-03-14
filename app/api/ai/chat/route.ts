@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     try {
       await sendPushNotification(userId, {
         type: "chat_response",
-        title: "Bar Manager — Chat Reply",
+        title: "Willy — Chat Reply",
         body: preview,
         url: "/chat",
         tag: "chat-response",

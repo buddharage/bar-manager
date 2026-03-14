@@ -1,4 +1,6 @@
-# Bar Manager
+# Willy
+
+Named after [Willy](https://buffy.fandom.com/wiki/Willy), the demon bartender from *Buffy the Vampire Slayer* who runs Willy's Place — the seedy bar where demons, vampires, and the occasional Slayer come to drink.
 
 AI-powered operations dashboard for a 50-seat cocktail bar in Brooklyn, NY. Integrates with Toast POS, Google Workspace, QuickBooks Online, and Sling to automate inventory alerts, sales tracking, document search, bookkeeping, tax filing, and scheduling.
 
@@ -31,8 +33,8 @@ This guide walks through every step to get a working instance. Steps 1–4 are r
 ### Step 1. Clone and install dependencies
 
 ```bash
-git clone <your-repo-url> bar-manager
-cd bar-manager
+git clone <your-repo-url> willy
+cd willy
 npm install
 ```
 
@@ -89,7 +91,7 @@ The app uses Supabase as its PostgreSQL database. All data — inventory, sales,
 
 1. Go to [supabase.com](https://supabase.com) and sign in
 2. Click **New Project**
-3. Choose an organization, name your project (e.g. `bar-manager`), set a database password, and pick a region close to you
+3. Choose an organization, name your project (e.g. `willy`), set a database password, and pick a region close to you
 4. Wait for the project to finish provisioning (~2 minutes)
 
 #### 3b. Copy your API credentials
@@ -311,7 +313,7 @@ The core PWA push notification infrastructure is in place. To get it fully worki
 1. **Generate and deploy VAPID keys** — Run `npx web-push generate-vapid-keys`, add both keys to `.env.local` and Vercel environment variables
 2. **Run migration 013** — Apply `supabase/migrations/013_push_subscriptions.sql` if not already applied
 3. **Deploy with HTTPS** — Push notifications require a secure context; `localhost` works for dev but production must be HTTPS
-4. **Replace placeholder icons** — `public/icon-192.png` and `public/icon-512.png` are placeholders; replace with branded bar-manager icons for the PWA install experience
+4. **Replace placeholder icons** — `public/icon-192.svg` and `public/icon-512.svg` are the demon bartender SVG icons for the PWA install experience
 5. **Test PWA install flow** — Install the app from Chrome (desktop and mobile) and verify it launches in standalone mode
 6. **Test inventory alert notifications** — Trigger a Toast stock webhook or inventory recalculation that drops an item below par and confirm the push notification arrives
 7. **Test chat response notifications** — Send a chat message, switch away from the tab, and verify the notification appears
@@ -551,8 +553,9 @@ lib/
 public/
   sw.js                   Service worker for push notifications
   manifest.json           PWA web app manifest
-  icon-192.png            PWA icon (192x192)
-  icon-512.png            PWA icon (512x512)
+  favicon.svg             Favicon (demon bartender SVG)
+  icon-192.svg            PWA icon (192x192 SVG)
+  icon-512.svg            PWA icon (512x512 SVG)
 
 scripts/
   sync-xtrachef.ts        CLI script for xtraCHEF recipe sync

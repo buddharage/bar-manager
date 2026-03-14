@@ -154,7 +154,7 @@ export function Nav() {
         {isMobile ? (
           <>
             <Link href="/dashboard" className="flex flex-1 items-center gap-2 font-semibold">
-              <span className="text-lg">Bar Manager</span>
+              <span className="text-lg">Willy</span>
             </Link>
             <button
               onClick={() => setMobileOpen(false)}
@@ -175,7 +175,7 @@ export function Nav() {
         ) : (
           <>
             <Link href="/dashboard" className="flex flex-1 items-center gap-2 font-semibold">
-              <span className="text-lg">Bar Manager</span>
+              <span className="text-lg">Willy</span>
             </Link>
             <button
               onClick={() => setCollapsed(true)}
@@ -248,7 +248,7 @@ export function Nav() {
             {MenuIcon}
           </button>
           <Link href="/dashboard" className="ml-3 font-semibold">
-            <span className="text-lg">Bar Manager</span>
+            <span className="text-lg">Willy</span>
           </Link>
         </div>
 

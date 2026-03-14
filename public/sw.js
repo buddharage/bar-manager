@@ -1,4 +1,4 @@
-// Service worker for Bar Manager push notifications.
+// Service worker for Willy push notifications.
 // No offline caching — this SW exists solely for push notification support.
 
 self.addEventListener("install", (event) => {
@@ -17,7 +17,7 @@ self.addEventListener("push", (event) => {
     payload = event.data.json();
   } catch {
     payload = {
-      title: "Bar Manager",
+      title: "Willy",
       body: event.data.text(),
       url: "/dashboard",
     };
@@ -25,8 +25,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: payload.body,
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: "/icon-192.svg",
+    badge: "/icon-192.svg",
     tag: payload.tag || undefined,
     data: { url: payload.url || "/dashboard" },
   };

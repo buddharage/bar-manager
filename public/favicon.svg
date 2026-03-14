@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#1a1a2e"/>
+  <circle cx="32" cy="32" r="28" fill="#16213e" stroke="#e94560" stroke-width="1.5"/>
+
+  <!-- Demon horns -->
+  <path d="M18 22 L14 8 L22 18 Z" fill="#e94560"/>
+  <path d="M46 22 L50 8 L42 18 Z" fill="#e94560"/>
+
+  <!-- Head shape -->
+  <ellipse cx="32" cy="30" rx="14" ry="15" fill="#7b2d8e"/>
+
+  <!-- Glowing eyes -->
+  <ellipse cx="26" cy="27" rx="3.5" ry="2.5" fill="#ff0" opacity="0.9"/>
+  <ellipse cx="38" cy="27" rx="3.5" ry="2.5" fill="#ff0" opacity="0.9"/>
+  <ellipse cx="26" cy="27" rx="1.5" ry="2" fill="#e94560"/>
+  <ellipse cx="38" cy="27" rx="1.5" ry="2" fill="#e94560"/>
+
+  <!-- Pointed ears -->
+  <path d="M18 26 L10 20 L17 30 Z" fill="#7b2d8e"/>
+  <path d="M46 26 L54 20 L47 30 Z" fill="#7b2d8e"/>
+
+  <!-- Sinister grin -->
+  <path d="M23 36 Q27 42 32 40 Q37 42 41 36" stroke="#e94560" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Fangs -->
+  <path d="M26 37 L25 41 L28 38" fill="#fff"/>
+  <path d="M38 37 L39 41 L36 38" fill="#fff"/>
+
+  <!-- Cocktail shaker in hand -->
+  <rect x="42" y="38" width="8" height="16" rx="2" fill="#c0c0c0" opacity="0.9"/>
+  <rect x="44" y="36" width="4" height="3" rx="1" fill="#d4d4d4"/>
+  <rect x="45" y="33" width="2" height="4" rx="1" fill="#d4d4d4"/>
+  <!-- Shaker shine -->
+  <line x1="44" y1="42" x2="44" y2="50" stroke="#fff" stroke-width="0.8" opacity="0.5"/>
+
+  <!-- Bowtie -->
+  <path d="M28 44 L32 46 L36 44 L32 48 Z" fill="#e94560"/>
+</svg>
