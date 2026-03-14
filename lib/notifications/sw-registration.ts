@@ -20,7 +20,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 export async function subscribeToPush(): Promise<PushSubscription | null> {
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!vapidPublicKey) {
-    console.warn("VAPID public key not configured");
+    console.error("[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY is not set — cannot subscribe to push notifications");
     return null;
   }
 

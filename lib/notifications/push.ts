@@ -15,6 +15,9 @@ function getVapidKeys() {
   const subject = process.env.VAPID_SUBJECT || "mailto:admin@barmanager.app";
 
   if (!publicKey || !privateKey) {
+    console.error(
+      "[Push] VAPID keys not configured — push notifications are disabled. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars."
+    );
     return null;
   }
 
@@ -31,7 +34,7 @@ export async function sendPushNotification(
 ): Promise<{ sent: number; failed: number }> {
   const vapid = getVapidKeys();
   if (!vapid) {
-    console.warn("VAPID keys not configured, skipping push notification");
+    console.error("[Push] VAPID keys not configured, cannot send push notification");
     return { sent: 0, failed: 0 };
   }
 
@@ -63,6 +66,9 @@ export async function sendPushNotification(
     .eq("user_id", userId);
 
   if (!subscriptions || subscriptions.length === 0) {
+    console.error(
+      `[Push] No push subscriptions found for user "${userId}" — has the user enabled notifications in Settings?`
+    );
     return { sent: 0, failed: 0 };
   }
 
@@ -85,8 +91,10 @@ export async function sendPushNotification(
     } catch (err: unknown) {
       const statusCode = (err as { statusCode?: number }).statusCode;
       if (statusCode === 410 || statusCode === 404) {
-        // Subscription expired or invalid — mark for cleanup
+        console.error(`[Push] Subscription expired (${statusCode}), removing endpoint: ${sub.endpoint}`);
         expiredIds.push(sub.id);
+      } else {
+        console.error(`[Push] Failed to send notification to ${sub.endpoint}:`, err);
       }
       failed++;
     }
@@ -117,7 +125,10 @@ export async function broadcastInventoryAlert(
     .from("push_subscriptions")
     .select("user_id");
 
-  if (!subs || subs.length === 0) return;
+  if (!subs || subs.length === 0) {
+    console.error("[Push] No push subscriptions exist — no users have enabled notifications");
+    return;
+  }
 
   const userIds = [...new Set(subs.map((s) => s.user_id))];
 
