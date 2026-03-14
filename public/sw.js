@@ -1,4 +1,4 @@
-// Service worker for Bar Manager push notifications.
+// Service worker for Moe push notifications.
 // No offline caching — this SW exists solely for push notification support.
 
 self.addEventListener("install", (event) => {
@@ -17,7 +17,7 @@ self.addEventListener("push", (event) => {
     payload = event.data.json();
   } catch {
     payload = {
-      title: "Bar Manager",
+      title: "Moe",
       body: event.data.text(),
       url: "/dashboard",
     };

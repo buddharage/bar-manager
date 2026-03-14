@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
       sendPushNotification(userId, {
         type: "chat_response",
-        title: "Bar Manager — Chat Reply",
+        title: "Moe — Chat Reply",
         body: preview,
         url: "/chat",
         tag: "chat-response",

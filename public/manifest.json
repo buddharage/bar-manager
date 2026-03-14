@@ -1,6 +1,6 @@
 {
-  "name": "Bar Manager",
-  "short_name": "Bar Mgr",
+  "name": "Moe",
+  "short_name": "Moe",
   "description": "AI-powered bar operations assistant",
   "start_url": "/dashboard",
   "display": "standalone",
