@@ -15,6 +15,7 @@
 
 import { SupabaseClient } from "@supabase/supabase-js";
 import { toBaseUnit } from "../units";
+import { broadcastInventoryAlert } from "../notifications/push";
 
 interface Ingredient {
   id: number;
@@ -183,13 +184,22 @@ export async function recalculateExpectedInventory(
           .maybeSingle();
 
         if (!existingAlert) {
+          const alertMessage = `${ing.name} expected inventory is ${alertType === "out_of_stock" ? "depleted" : "below par level"} (expected: ${expectedQty.toFixed(1)} ${ing.unit || "units"}, par: ${ing.par_level})`;
           await supabase.from("inventory_alerts").insert({
             ingredient_id: ing.id,
             alert_type: alertType,
             threshold: ing.par_level,
-            message: `${ing.name} expected inventory is ${alertType === "out_of_stock" ? "depleted" : "below par level"} (expected: ${expectedQty.toFixed(1)} ${ing.unit || "units"}, par: ${ing.par_level})`,
+            message: alertMessage,
           });
           alertsCreated++;
+
+          // Send push notification
+          broadcastInventoryAlert({
+            title: alertType === "out_of_stock" ? "Out of Stock" : "Low Stock Alert",
+            body: alertMessage,
+            url: "/inventory/alerts",
+            tag: `inventory-alert-${ing.id}`,
+          }).catch((err) => console.error("Push notification failed:", err));
         }
       } else {
         // Resolve existing alerts if expected is back above par

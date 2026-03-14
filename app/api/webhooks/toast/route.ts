@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/integrations/toast-client";
+import { broadcastInventoryAlert } from "@/lib/notifications/push";
 
 // Toast stock webhook — receives real-time inventory changes
 export async function POST(request: NextRequest) {
@@ -45,12 +46,21 @@ export async function POST(request: NextRequest) {
             .single();
 
           if (!existingAlert) {
+            const alertMessage = `${item.name} is ${alertType === "out_of_stock" ? "out of stock" : "below par level"} (${quantity} ${item.unit} remaining, par: ${item.par_level})`;
             await supabase.from("inventory_alerts").insert({
               item_id: item.id,
               alert_type: alertType,
               threshold: item.par_level,
-              message: `${item.name} is ${alertType === "out_of_stock" ? "out of stock" : "below par level"} (${quantity} ${item.unit} remaining, par: ${item.par_level})`,
+              message: alertMessage,
             });
+
+            // Send push notification
+            broadcastInventoryAlert({
+              title: alertType === "out_of_stock" ? "Out of Stock" : "Low Stock Alert",
+              body: alertMessage,
+              url: "/inventory/alerts",
+              tag: `inventory-alert-${item.id}`,
+            }).catch((err) => console.error("Push notification failed:", err));
           }
         } else {
           // Stock is back above par — resolve alerts

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
@@ -98,6 +99,22 @@ export function Nav() {
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [alertCount, setAlertCount] = useState(0);
+  const supabaseRef = useRef(createClient());
+
+  // Fetch unresolved alert count
+  useEffect(() => {
+    async function loadAlertCount() {
+      const { count } = await supabaseRef.current
+        .from("inventory_alerts")
+        .select("id", { count: "exact", head: true })
+        .eq("resolved", false);
+      setAlertCount(count || 0);
+    }
+    loadAlertCount();
+    const interval = setInterval(loadAlertCount, 60000); // refresh every minute
+    return () => clearInterval(interval);
+  }, []);
 
   // Collapse by default on mobile, expand on desktop
   useEffect(() => {
@@ -188,7 +205,14 @@ export function Nav() {
                   : "text-muted-foreground"
               )}
             >
-              {icons[item.icon]}
+              <span className="relative">
+                {icons[item.icon]}
+                {item.href === "/inventory/alerts" && alertCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
+                    {alertCount > 9 ? "9+" : alertCount}
+                  </span>
+                )}
+              </span>
               {(!collapsed || isMobile) && item.label}
             </Link>
           );
