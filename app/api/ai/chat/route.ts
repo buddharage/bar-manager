@@ -20,8 +20,9 @@ export async function POST(request: NextRequest) {
     const userId = request.cookies.get("session")?.value?.split(".")[0] || "default";
     const preview = response.length > 100 ? response.slice(0, 100) + "..." : response;
 
+    let pushResult = { sent: 0, failed: 0, error: null as string | null };
     try {
-      await sendPushNotification(userId, {
+      pushResult = await sendPushNotification(userId, {
         type: "chat_response",
         title: "Willy — Chat Reply",
         body: preview,
@@ -29,10 +30,11 @@ export async function POST(request: NextRequest) {
         tag: "chat-response",
       });
     } catch (err) {
+      pushResult.error = String(err);
       console.error("Chat push notification failed:", err);
     }
 
-    return NextResponse.json({ response, usage });
+    return NextResponse.json({ response, usage, push: { userId, ...pushResult } });
   } catch (error) {
     console.error("AI chat error:", error);
     return NextResponse.json(

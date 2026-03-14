@@ -38,6 +38,17 @@ export default function ChatPage() {
 
       const data = await res.json();
 
+      if (data.push) {
+        const p = data.push;
+        if (p.error) {
+          console.error("[Push] Server error sending notification:", p.error);
+        } else if (p.sent === 0 && p.failed === 0) {
+          console.error(`[Push] No notifications sent (userId="${p.userId}"). Check subscriptions and preferences.`);
+        } else {
+          console.log(`[Push] Notification result: sent=${p.sent}, failed=${p.failed}, userId="${p.userId}"`);
+        }
+      }
+
       if (data.error) {
         setMessages([
           ...newMessages,
