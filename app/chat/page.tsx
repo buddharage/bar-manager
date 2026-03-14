@@ -15,20 +15,9 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const tabActiveRef = useRef(true);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // Track tab visibility for push notification decisions
-  useEffect(() => {
-    const handler = () => {
-      tabActiveRef.current = !document.hidden;
-    };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  }, []);
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
@@ -43,10 +32,7 @@ export default function ChatPage() {
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Tab-Active": tabActiveRef.current ? "true" : "false",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMessages }),
       });
 

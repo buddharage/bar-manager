@@ -193,13 +193,18 @@ export async function recalculateExpectedInventory(
           });
           alertsCreated++;
 
-          // Send push notification
-          broadcastInventoryAlert({
-            title: alertType === "out_of_stock" ? "Out of Stock" : "Low Stock Alert",
-            body: alertMessage,
-            url: "/inventory/alerts",
-            tag: `inventory-alert-${ing.id}`,
-          }).catch((err) => console.error("Push notification failed:", err));
+          // Send push notification — must await on serverless to prevent
+          // the execution context from being killed before delivery.
+          try {
+            await broadcastInventoryAlert({
+              title: alertType === "out_of_stock" ? "Out of Stock" : "Low Stock Alert",
+              body: alertMessage,
+              url: "/inventory/alerts",
+              tag: `inventory-alert-${ing.id}`,
+            });
+          } catch (err) {
+            console.error("Push notification failed:", err);
+          }
         }
       } else {
         // Resolve existing alerts if expected is back above par

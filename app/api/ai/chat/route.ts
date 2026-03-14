@@ -10,31 +10,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Messages required" }, { status: 400 });
     }
 
-    const tabActive = request.headers.get("x-tab-active") !== "false";
-    const startTime = Date.now();
-
     const { response, usage } = await chat(messages);
 
-    const elapsed = Date.now() - startTime;
+    // Always send the push notification — the service worker will suppress
+    // it if the user is actively viewing the chat page. The old approach of
+    // checking an x-tab-active header was broken: the header captured tab
+    // state at request time (always "true" since the user just clicked Send),
+    // not at response time when it actually matters.
+    const userId = request.cookies.get("session")?.value?.split(".")[0] || "default";
+    const preview = response.length > 100 ? response.slice(0, 100) + "..." : response;
 
-    // Send push notification if tab is inactive or response took > 5s
-    // Must await before returning — on serverless, the execution context is
-    // killed once the response is sent, so fire-and-forget won't deliver.
-    if (!tabActive || elapsed > 5000) {
-      const userId = request.cookies.get("session")?.value?.split(".")[0] || "default";
-      const preview = response.length > 100 ? response.slice(0, 100) + "..." : response;
-
-      try {
-        await sendPushNotification(userId, {
-          type: "chat_response",
-          title: "Bar Manager — Chat Reply",
-          body: preview,
-          url: "/chat",
-          tag: "chat-response",
-        });
-      } catch (err) {
-        console.error("Chat push notification failed:", err);
-      }
+    try {
+      await sendPushNotification(userId, {
+        type: "chat_response",
+        title: "Bar Manager — Chat Reply",
+        body: preview,
+        url: "/chat",
+        tag: "chat-response",
+      });
+    } catch (err) {
+      console.error("Chat push notification failed:", err);
     }
 
     return NextResponse.json({ response, usage });
