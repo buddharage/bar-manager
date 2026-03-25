@@ -156,7 +156,7 @@ const tools: Tool[] = [
       {
         name: "query_recipes",
         description:
-          "Get recipes (cocktails, dishes, prep recipes) with their ingredients. Can filter by on-menu status, type, recipe group, or search by name.",
+          "Get recipes (cocktails, dishes, prep recipes). Can filter by on-menu status, type, recipe group, or search by name. Use detail=true to include ingredients, instructions, and notes.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
@@ -175,6 +175,10 @@ const tools: Tool[] = [
             search: {
               type: SchemaType.STRING,
               description: "Search recipes by name (partial match)",
+            },
+            detail: {
+              type: SchemaType.BOOLEAN,
+              description: "If true, include full details: ingredients, instructions, notes, image_url. Default false (returns summary only).",
             },
           },
         },
@@ -414,12 +418,17 @@ async function executeTool(
     }
 
     case "query_recipes": {
+      const selectFields = args.detail
+        ? "id, name, type, recipe_group, menu_price, prime_cost, food_cost_pct, on_menu, notes, instructions, image_url, serving_size, creator, created_at_label, refrigerate, recipe_ingredients(id, name, type, quantity, uom, cost)"
+        : "id, name, type, recipe_group, menu_price, food_cost_pct, on_menu";
+
       let query = supabase
         .from("recipes")
-        .select("id, name, type, recipe_group, menu_price, prime_cost, food_cost_pct, on_menu, notes, instructions, image_url, serving_size, creator, created_at_label, refrigerate, recipe_ingredients(id, name, type, quantity, uom, cost)")
+        .select(selectFields)
         .order("type", { ascending: true })
         .order("recipe_group", { ascending: true })
-        .order("name", { ascending: true });
+        .order("name", { ascending: true })
+        .limit(200);
 
       if (args.on_menu !== undefined) {
         query = query.eq("on_menu", args.on_menu);
@@ -444,7 +453,8 @@ async function executeTool(
       let query = supabase
         .from("ingredients")
         .select("id, name, category, unit, current_quantity, par_level, expected_quantity, purchase_unit, purchase_unit_quantity, cost_per_unit, last_counted_at")
-        .order("name");
+        .order("name")
+        .limit(500);
 
       if (args.category) {
         query = query.ilike("category", `%${args.category}%`);
@@ -452,12 +462,16 @@ async function executeTool(
       if (args.search) {
         query = query.ilike("name", `%${args.search}%`);
       }
+      if (args.low_stock_only) {
+        query = query.not("par_level", "is", null);
+      }
 
       const { data, error } = await query;
       if (error) throw error;
 
+      // Column-to-column comparison not supported in PostgREST, filter in JS
       const result = args.low_stock_only && data
-        ? data.filter((item) => item.par_level && item.current_quantity <= item.par_level)
+        ? data.filter((item) => item.current_quantity <= item.par_level)
         : data;
       setCachedToolResult(name, args, result);
       return result;
@@ -466,8 +480,9 @@ async function executeTool(
     case "query_gift_cards": {
       let query = supabase
         .from("gift_cards")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("id, card_id, beginning_balance, current_balance, status, issued_date, last_used_date, purchaser_name, recipient_name, notes")
+        .order("created_at", { ascending: false })
+        .limit(100);
 
       if (args.status) {
         query = query.eq("status", args.status);
@@ -483,40 +498,53 @@ async function executeTool(
       const activeOnly = args.active_only !== false;
       let empQuery = supabase
         .from("employees")
-        .select("*")
-        .order("name");
+        .select("id, name, role, hourly_rate, active")
+        .order("name")
+        .limit(100);
 
       if (activeOnly) {
         empQuery = empQuery.eq("active", true);
       }
 
-      const { data: employees, error: empError } = await empQuery;
-      if (empError) throw empError;
+      const wantTimeEntries = args.include_time_entries && args.start_date && args.end_date;
 
-      if (args.include_time_entries && args.start_date && args.end_date) {
-        const { data: timeEntries, error: teError } = await supabase
-          .from("time_entries")
-          .select("*")
-          .gte("date", args.start_date)
-          .lte("date", args.end_date)
-          .order("date");
+      if (wantTimeEntries) {
+        const [empResult, teResult] = await Promise.all([
+          empQuery,
+          supabase
+            .from("time_entries")
+            .select("employee_id, date, regular_hours, overtime_hours, tips")
+            .gte("date", args.start_date as string)
+            .lte("date", args.end_date as string)
+            .order("date")
+            .limit(1000),
+        ]);
 
-        if (teError) throw teError;
+        if (empResult.error) throw empResult.error;
+        if (teResult.error) throw teResult.error;
 
-        const result = { employees, time_entries: timeEntries };
+        const employeeIds = new Set((empResult.data || []).map((e) => e.id));
+        const scopedEntries = (teResult.data || []).filter((te) => employeeIds.has(te.employee_id));
+
+        const result = { employees: empResult.data, time_entries: scopedEntries };
         setCachedToolResult(name, args, result);
         return result;
       }
 
-      setCachedToolResult(name, args, employees);
-      return employees;
+      const { data: employees, error: empError } = await empQuery;
+      if (empError) throw empError;
+
+      const result = { employees, time_entries: [] };
+      setCachedToolResult(name, args, result);
+      return result;
     }
 
     case "query_tax_periods": {
       let query = supabase
         .from("tax_periods")
-        .select("*")
-        .order("period_start", { ascending: false });
+        .select("id, period_start, period_end, taxable_sales, tax_collected, tax_due, status, filed_at")
+        .order("period_start", { ascending: false })
+        .limit(50);
 
       if (args.status) {
         query = query.eq("status", args.status);
