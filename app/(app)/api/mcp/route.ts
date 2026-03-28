@@ -10,6 +10,7 @@
  * Set MCP_BEARER_TOKEN in your environment to require authentication.
  * When set, clients must send an `Authorization: Bearer <token>` header.
  */
+import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createServerClient } from "@/lib/supabase/server";
@@ -19,8 +20,14 @@ function authenticate(req: Request): Response | null {
   const token = process.env.MCP_BEARER_TOKEN;
   if (!token) return null; // no token configured, skip auth
 
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${token}`) {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const expected = `Bearer ${token}`;
+
+  // Constant-time comparison to prevent timing attacks
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+
+  if (a.byteLength !== b.byteLength || !timingSafeEqual(a, b)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
