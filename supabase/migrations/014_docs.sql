@@ -247,14 +247,15 @@ Classy Screens
 ## Lease
 
 Ends Feb 28, 2033
-Year 1: $42,000.00 in equal monthly installments of $3,500.00
-Year 2: $42,260.00 in equal monthly installments of $3,605.00
-Year 3: $44,557.80 in equal monthly installments of $3,713.15
-Year 4: $45,894.53 in equal monthly installments of $3,824.54
-Year 5: $47,271.37 in equal monthly installments of $3,939.28
-Year 6: $48,689.67 in equal monthly installments of $4,057.46
-Year 7: $50,150.20 in equal monthly installments of $4,179.18
-Year 8: $51,654.70 in equal monthly installments of $4,304.56
-Year 9: $53,204.34 in equal monthly installments of $4,433.70
-Year 10: $54,800.47 in equal monthly installments of $4,566.71'
+
+- Year 1: $42,000.00 in equal monthly installments of $3,500.00
+- Year 2: $42,260.00 in equal monthly installments of $3,605.00
+- Year 3: $44,557.80 in equal monthly installments of $3,713.15
+- Year 4: $45,894.53 in equal monthly installments of $3,824.54
+- Year 5: $47,271.37 in equal monthly installments of $3,939.28
+- Year 6: $48,689.67 in equal monthly installments of $4,057.46
+- Year 7: $50,150.20 in equal monthly installments of $4,179.18
+- Year 8: $51,654.70 in equal monthly installments of $4,304.56
+- Year 9: $53,204.34 in equal monthly installments of $4,433.70
+- Year 10: $54,800.47 in equal monthly installments of $4,566.71'
 );
