@@ -274,7 +274,7 @@ export default function DocsPage() {
                   <li>Switch to <strong>Edit</strong> to modify content using Markdown</li>
                   <li>Changes <strong>auto-save</strong> after 3 seconds, or press <strong>Cmd+S</strong></li>
                   <li>Click <strong>History</strong> to view or restore past versions</li>
-                  <li>Use the <strong>sidebar</strong> to jump between sections</li>
+                  <li>Use the <strong>sidebar</strong> to jump between sections — it auto-generates from <strong>## headings</strong></li>
                 </ul>
               </div>
             </div>
