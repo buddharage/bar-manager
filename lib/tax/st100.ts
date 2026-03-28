@@ -25,16 +25,16 @@ export interface ST100Worksheet {
 }
 
 export function computeST100(
-  salesData: Array<{ gross_sales: number; net_sales: number; tax_collected: number }>
+  salesData: Array<{ gross_sales: number | null; net_sales: number | null; tax_collected: number | null }>
 ): ST100Worksheet {
-  const grossSales = salesData.reduce((sum, d) => sum + d.gross_sales, 0);
-  const taxableSales = salesData.reduce((sum, d) => sum + d.net_sales, 0);
-  const taxCollected = salesData.reduce((sum, d) => sum + d.tax_collected, 0);
+  const grossSales = salesData.reduce((sum, d) => sum + (d.gross_sales ?? 0), 0);
+  const taxableSales = salesData.reduce((sum, d) => sum + (d.net_sales ?? 0), 0);
+  const taxCollected = salesData.reduce((sum, d) => sum + (d.tax_collected ?? 0), 0);
 
   const stateTaxDue = round(taxableSales * NY_STATE_RATE);
   const cityTaxDue = round(taxableSales * NYC_CITY_RATE);
   const mctdTaxDue = round(taxableSales * MCTD_RATE);
-  const totalTaxDue = stateTaxDue + cityTaxDue + mctdTaxDue;
+  const totalTaxDue = round(stateTaxDue + cityTaxDue + mctdTaxDue);
 
   return {
     periodStart: "",
