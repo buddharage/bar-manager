@@ -243,6 +243,42 @@ const tools: Tool[] = [
           },
         },
       },
+      {
+        name: "format_recipes_for_xtrachef",
+        description:
+          "Format recipes from the database into structured output ready for xtraCHEF entry. Returns ingredients with house brand preferences applied.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            recipe_group: {
+              type: SchemaType.STRING,
+              description: "Filter by recipe group (e.g., 'House Cocktails', 'Cocktail Batch', 'Syrups')",
+            },
+            name: {
+              type: SchemaType.STRING,
+              description: "Search by recipe name",
+            },
+          },
+        },
+      },
+      {
+        name: "query_sync_logs",
+        description:
+          "Get recent integration sync logs. Shows status of Toast, Google Drive, xtraCHEF, and other syncs.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            source: {
+              type: SchemaType.STRING,
+              description: "Filter by source (e.g., 'toast', 'google_drive', 'xtrachef')",
+            },
+            limit: {
+              type: SchemaType.INTEGER,
+              description: "Number of logs to return (default 10)",
+            },
+          },
+        },
+      },
     ],
   },
 ];
@@ -492,6 +528,85 @@ async function executeTool(
 
       if (args.status) {
         query = query.eq("status", args.status);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
+    }
+
+    case "format_recipes_for_xtrachef": {
+      let query = supabase
+        .from("recipes")
+        .select("name, type, recipe_group, serving_size, batch_size, batch_uom, recipe_ingredients(name, type, quantity, uom)")
+        .order("name");
+
+      if (args.recipe_group) {
+        query = query.ilike("recipe_group", `%${args.recipe_group}%`);
+      }
+      if (args.name) {
+        query = query.ilike("name", `%${args.name}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) return { message: "No recipes found matching the criteria." };
+
+      const brandMap: Record<string, string> = {
+        gin: "Gary's Good",
+        vodka: "Gary's Good",
+        bourbon: "Old Crow",
+        rum: "Plantation Dark",
+        tequila: "Anza",
+      };
+
+      const formatted = data.map((recipe) => {
+        const ingredients = (recipe.recipe_ingredients || []).map(
+          (ing: { name: string; type: string; quantity: number | null; uom: string | null }) => {
+            let ingredientName = ing.name;
+            const nameLower = ingredientName.toLowerCase();
+            for (const [spirit, brand] of Object.entries(brandMap)) {
+              if (nameLower.includes(spirit) && !nameLower.includes(brand.toLowerCase())) {
+                ingredientName += ` (prefer ${brand})`;
+                break;
+              }
+            }
+            return { name: ingredientName, type: ing.type, quantity: ing.quantity, uom: ing.uom };
+          }
+        );
+
+        return {
+          name: recipe.name,
+          recipe_group: recipe.recipe_group,
+          type: recipe.type,
+          serving_size: recipe.serving_size,
+          batch_size: recipe.batch_size,
+          batch_uom: recipe.batch_uom,
+          ingredients,
+          ingredient_count: ingredients.length,
+          has_ingredients: ingredients.length > 0,
+        };
+      });
+
+      const result = {
+        total_recipes: formatted.length,
+        missing_ingredients: formatted.filter((r) => !r.has_ingredients).map((r) => r.name),
+        recipes: formatted,
+      };
+      setCachedToolResult(name, args, result);
+      return result;
+    }
+
+    case "query_sync_logs": {
+      let query = supabase
+        .from("sync_logs")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit((args.limit as number) || 10);
+
+      if (args.source) {
+        query = query.eq("source", args.source);
       }
 
       const { data, error } = await query;
