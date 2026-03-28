@@ -259,7 +259,26 @@ export default function DocsPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Docs</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Docs</h1>
+            <div className="group relative">
+              <button
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="How to use this page"
+              >
+                ?
+              </button>
+              <div className="absolute left-0 top-full z-50 mt-1.5 hidden w-64 rounded-lg border bg-popover p-3 text-sm text-popover-foreground shadow-md group-hover:block">
+                <p className="font-medium mb-1.5">How to use this page</p>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  <li>Switch to <strong>Edit</strong> to modify content using Markdown</li>
+                  <li>Changes <strong>auto-save</strong> after 3 seconds, or press <strong>Cmd+S</strong></li>
+                  <li>Click <strong>History</strong> to view or restore past versions</li>
+                  <li>Use the <strong>sidebar</strong> to jump between sections</li>
+                </ul>
+              </div>
+            </div>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {doc.title}
           </p>
