@@ -109,7 +109,7 @@ The app uses Supabase as its PostgreSQL database. All data — inventory, sales,
 
 #### 3c. Run database migrations
 
-The app will not start until the database schema is created. There are 14 migration files that must be run **in order**, since later migrations depend on tables created by earlier ones.
+The app will not start until the database schema is created. There are 15 migration files that must be run **in order**, since later migrations depend on tables created by earlier ones.
 
 **How to run a migration:**
 
@@ -140,6 +140,7 @@ The app will not start until the database schema is created. There are 14 migrat
 | 12 | `011_syrup_metadata_backfill.sql` | Backfills syrup recipe metadata |
 | 13 | `012_gift_cards.sql` | `gift_cards` table for gift card tracking |
 | 14 | `013_push_subscriptions.sql` | `push_subscriptions` and `notification_preferences` tables for push notifications |
+| 15 | `014_docs.sql` | `docs` and `doc_versions` tables for the Docs page; seeds the cheat-sheet document |
 
 > **Troubleshooting:** If you see errors like `Could not find the table 'public.sync_logs' in the schema cache`, the migrations haven't been applied or were run out of order. Go back and run them sequentially from the beginning.
 
@@ -290,7 +291,7 @@ VAPID_SUBJECT=mailto:you@example.com     (your email — required by the Web Pus
 
 #### 8b. Verify the migration was applied
 
-Push notifications require the `push_subscriptions` and `notification_preferences` tables. If you ran all 14 migrations in Step 3c, these tables already exist. If not, run migration `013_push_subscriptions.sql` now via the Supabase SQL Editor.
+Push notifications require the `push_subscriptions` and `notification_preferences` tables. If you ran all 15 migrations in Step 3c, these tables already exist. If not, run migration `013_push_subscriptions.sql` now via the Supabase SQL Editor.
 
 #### 8c. Enable in the app
 
@@ -624,6 +625,7 @@ app/
   menu/sales/             Menu item sales analytics with date filtering, sorting, and category grouping
   gift-cards/             Gift card balance and liability tracking
   chat/                   Conversational AI interface
+  docs/                   Editable bar cheat-sheet with version history
   settings/               Integration status, push notifications, Google connect, xtraCHEF token, sync history
   tax/                    Sales tax worksheet (Phase 2)
   bookkeeping/            QBO journal entries (Phase 2)
@@ -649,6 +651,7 @@ app/
     webhooks/toast/       Real-time Toast stock webhook
     ai/chat/              Gemini chat endpoint
     ai/reorder/           AI reorder suggestions endpoint
+    docs/                 Docs CRUD (list, fetch by slug, update with versioning, restore)
 
 lib/
   auth/                   Session token (HMAC-SHA256) + request verification

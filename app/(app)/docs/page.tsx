@@ -139,7 +139,7 @@ export default function DocsPage() {
     [editTitle, debouncedSave]
   );
 
-  // Cmd+S handler
+  // Cmd+S / Ctrl+S handler
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
