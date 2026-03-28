@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Printer, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { RECIPE_GROUPS } from "@/lib/constants/recipe-groups";
+import { abbreviateUom } from "@/lib/units";
 
 interface RecipeIngredient {
   id: number;
@@ -1052,7 +1053,7 @@ function MobileRecipeCard({
                     </span>
                     <span className="text-muted-foreground shrink-0 ml-2 text-right">
                       {ing.quantity != null ? ing.quantity : ""}{" "}
-                      {ing.uom || ""}
+                      {abbreviateUom(ing.uom)}
                       {ing.cost != null && (
                         <span className="ml-1">${Number(ing.cost).toFixed(2)}</span>
                       )}
@@ -1292,7 +1293,7 @@ function ExpandableRecipeRow({
               {ing.quantity ?? "—"}
             </TableCell>
             <TableCell className="text-sm" colSpan={2}>
-              {ing.uom || "—"}
+              {abbreviateUom(ing.uom) || "—"}
             </TableCell>
             <TableCell className="text-sm text-right">
               {ing.cost != null ? `$${Number(ing.cost).toFixed(4)}` : "—"}

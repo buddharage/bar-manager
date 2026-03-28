@@ -2,6 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { Snowflake } from "lucide-react";
 import { NO_FULL_SPECS_GROUPS } from "@/lib/constants/recipe-groups";
 import { stripHtml } from "@/lib/utils";
+import { abbreviateUom } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ function expandIngredients(
           expanded.push({
             name: sub.name,
             quantity: scaledQty ? formatQty(scaledQty) : "",
-            uom: sub.uom || "",
+            uom: abbreviateUom(sub.uom),
             fromBatch: prep.name,
           });
         }
@@ -70,14 +71,14 @@ function expandIngredients(
         expanded.push({
           name: ing.name,
           quantity: ing.quantity ? formatQty(ing.quantity) : "",
-          uom: ing.uom || "",
+          uom: abbreviateUom(ing.uom),
         });
       }
     } else {
       expanded.push({
         name: ing.name,
         quantity: ing.quantity ? formatQty(ing.quantity) : "",
-        uom: ing.uom || "",
+        uom: abbreviateUom(ing.uom),
       });
     }
   }
@@ -184,7 +185,7 @@ export default async function PrintRecipesPage({
                             <td className="spec-qty">
                               {ing.quantity ? formatQty(ing.quantity) : ""}
                             </td>
-                            <td className="spec-uom">{ing.uom || ""}</td>
+                            <td className="spec-uom">{abbreviateUom(ing.uom)}</td>
                             <td className="spec-name">
                               {ing.name}
                               {ing.type === "Prep recipe" && (

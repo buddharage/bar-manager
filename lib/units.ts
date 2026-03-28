@@ -250,6 +250,40 @@ export function parseQuantityInput(
   return { quantity: num, raw: trimmed };
 }
 
+// ---------------------------------------------------------------------------
+// Abbreviation map: full name → short form for display
+// ---------------------------------------------------------------------------
+const UOM_ABBREV: Record<string, string> = {
+  milliliter: "ml", milliliters: "ml",
+  centiliter: "cl", centiliters: "cl",
+  liter: "L", liters: "L",
+  ounce: "oz", ounces: "oz", "fl oz": "oz", "fluid ounce": "oz", "fluid ounces": "oz",
+  cup: "cup", cups: "cups",
+  tablespoon: "tbsp", tablespoons: "tbsp",
+  teaspoon: "tsp", teaspoons: "tsp",
+  dash: "dash", dashes: "dashes",
+  barspoon: "bsp", barspoons: "bsp",
+  pint: "pt", pints: "pt",
+  quart: "qt", quarts: "qt",
+  gallon: "gal", gallons: "gal",
+  gram: "g", grams: "g",
+  kilogram: "kg", kilograms: "kg",
+  pound: "lb", pounds: "lb",
+  piece: "pc", pieces: "pcs",
+  slice: "slice", slices: "slices",
+  each: "ea",
+};
+
+/**
+ * Convert a unit of measure to its standard abbreviation.
+ * Returns the original string if no abbreviation is found.
+ */
+export function abbreviateUom(uom: string | null | undefined): string {
+  if (!uom) return "";
+  const key = uom.trim().toLowerCase();
+  return UOM_ABBREV[key] ?? uom;
+}
+
 /**
  * Known display-friendly unit labels.
  */
