@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Printer } from "lucide-react";
+import { Printer, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { RECIPE_GROUPS } from "@/lib/constants/recipe-groups";
 
 interface RecipeIngredient {
@@ -453,6 +453,25 @@ export function RecipeList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, activeTab, filtered, sort]);
 
+  // Are all expandable rows in the active group expanded?
+  const expandableGroupIds = useMemo(
+    () => activeGroupRecipes.filter((r) => r.recipe_ingredients?.length > 0).map((r) => r.id),
+    [activeGroupRecipes],
+  );
+  const allExpanded = expandableGroupIds.length > 0 && expandableGroupIds.every((id) => expandedIds.has(id));
+
+  function toggleExpandAll() {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (allExpanded) {
+        for (const id of expandableGroupIds) next.delete(id);
+      } else {
+        for (const id of expandableGroupIds) next.add(id);
+      }
+      return next;
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Filter controls (shared between mobile & desktop)
   // -------------------------------------------------------------------------
@@ -561,22 +580,29 @@ export function RecipeList({
 
             {/* Mobile category dropdown */}
             {groups.length > 0 && (
-              <select
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm font-medium"
-                value={activeTab}
-                onChange={(e) => setActiveTab(e.target.value)}
-              >
-                {groups.map((group) => {
-                  const count = filtered.filter(
-                    (r) => (r.recipe_group || "Uncategorized") === group,
-                  ).length;
-                  return (
-                    <option key={group} value={groupSlug(group)}>
-                      {group} ({count})
-                    </option>
-                  );
-                })}
-              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm font-medium"
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value)}
+                >
+                  {groups.map((group) => {
+                    const count = filtered.filter(
+                      (r) => (r.recipe_group || "Uncategorized") === group,
+                    ).length;
+                    return (
+                      <option key={group} value={groupSlug(group)}>
+                        {group} ({count})
+                      </option>
+                    );
+                  })}
+                </select>
+                {expandableGroupIds.length > 0 && (
+                  <Button variant="outline" size="icon" className="shrink-0 h-10 w-10" onClick={toggleExpandAll} title={allExpanded ? "Collapse All" : "Expand All"}>
+                    {allExpanded ? <ChevronsDownUp className="h-4 w-4" /> : <ChevronsUpDown className="h-4 w-4" />}
+                  </Button>
+                )}
+              </div>
             )}
           </>
         ) : (
@@ -631,22 +657,33 @@ export function RecipeList({
       {/* Desktop: category dropdown + sortable table */}
       {!isMobile && groups.length > 0 && (
         <div className="space-y-4">
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium"
-            value={activeTab}
-            onChange={(e) => setActiveTab(e.target.value)}
-          >
-            {groups.map((group) => {
-              const count = filtered.filter(
-                (r) => (r.recipe_group || "Uncategorized") === group,
-              ).length;
-              return (
-                <option key={group} value={groupSlug(group)}>
-                  {group} ({count})
-                </option>
-              );
-            })}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium"
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value)}
+            >
+              {groups.map((group) => {
+                const count = filtered.filter(
+                  (r) => (r.recipe_group || "Uncategorized") === group,
+                ).length;
+                return (
+                  <option key={group} value={groupSlug(group)}>
+                    {group} ({count})
+                  </option>
+                );
+              })}
+            </select>
+            {expandableGroupIds.length > 0 && (
+              <Button variant="outline" size="sm" onClick={toggleExpandAll}>
+                {allExpanded ? (
+                  <><ChevronsDownUp className="h-3.5 w-3.5 mr-1.5" />Collapse All</>
+                ) : (
+                  <><ChevronsUpDown className="h-3.5 w-3.5 mr-1.5" />Expand All</>
+                )}
+              </Button>
+            )}
+          </div>
 
           <Card>
             <CardContent className="pt-4">
