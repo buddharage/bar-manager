@@ -394,7 +394,7 @@ export default function DocsPage() {
                       </div>
                     </div>
                     <div className="rounded-lg border p-4 overflow-auto max-h-[55vh]">
-                      <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:rounded-xl prose-code:before:content-none prose-code:after:content-none prose-thead:border-border prose-tr:border-border">
+                      <div className="prose prose-base dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:rounded-xl prose-code:before:content-none prose-code:after:content-none prose-thead:border-border prose-tr:border-border">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {previewVersion.content}
                         </ReactMarkdown>
@@ -449,7 +449,7 @@ export default function DocsPage() {
 
             {/* Content */}
             <div className="flex-1 min-w-0" ref={contentRef}>
-              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:rounded-xl prose-code:before:content-none prose-code:after:content-none prose-thead:border-border prose-tr:border-border">
+              <div className="prose prose-base dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:rounded-xl prose-code:before:content-none prose-code:after:content-none prose-thead:border-border prose-tr:border-border">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
