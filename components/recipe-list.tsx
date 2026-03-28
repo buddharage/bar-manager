@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { cn } from "@/lib/utils";
+import { cn, stripHtml } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -834,7 +834,7 @@ function MobileRecipeCard({
             {recipe.instructions && (
               <div className="text-xs">
                 <span className="font-medium text-muted-foreground">Instructions:</span>{" "}
-                <span className="whitespace-pre-line">{recipe.instructions}</span>
+                <span className="whitespace-pre-line">{stripHtml(recipe.instructions)}</span>
               </div>
             )}
 
@@ -1049,7 +1049,7 @@ function ExpandableRecipeRow({
                 {recipe.instructions && (
                   <div>
                     <span className="font-medium text-muted-foreground">Instructions:</span>{" "}
-                    <span className="whitespace-pre-line">{recipe.instructions}</span>
+                    <span className="whitespace-pre-line">{stripHtml(recipe.instructions)}</span>
                   </div>
                 )}
                 {usedIn && usedIn.length > 0 && (
