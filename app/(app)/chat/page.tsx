@@ -11,12 +11,12 @@ interface Message {
 }
 
 const EXAMPLE_QUESTIONS = [
-  { icon: "📊", text: "How did we do last Saturday?" },
-  { icon: "🍸", text: "What are our top 5 cocktails this month?" },
-  { icon: "📦", text: "Show me items below par level" },
-  { icon: "🧾", text: "What was our last Sysco invoice?" },
-  { icon: "📁", text: "What's in the Operations folder?" },
-  { icon: "🔄", text: "Show me recent sync logs" },
+  { icon: "🧾", text: "How much sales tax do we owe in the last 7 days?" },
+  { icon: "🍸", text: "What are the top 10 House Cocktails this month?" },
+  { icon: "🍺", text: "How many cases of tecate, miller high life, and corona did we sell in the past week? Use the aggregate counts from Happy Hour, beer combos, and single orders." },
+  { icon: "📊", text: "How have sales trended in the past month?" },
+  { icon: "📦", text: "Show me items below par level. What should I order now?" },
+  { icon: "🔮", text: "What are your sales estimates for the coming week?" },
 ];
 
 export default function ChatPage() {
