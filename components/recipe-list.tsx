@@ -49,6 +49,12 @@ interface Recipe {
   recipe_ingredients: RecipeIngredient[];
 }
 
+interface CascadeInfo {
+  onMenuBy: string[];
+  creator: string | null;
+  createdAtLabel: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Mobile detection hook
 // ---------------------------------------------------------------------------
@@ -303,6 +309,87 @@ export function RecipeList({
     return map;
   }, [recipes, guidToRecipe]);
 
+  // Cascade values from parent recipes to their prep recipe / syrup ingredients.
+  // on_menu cascades from any on_menu parent. creator & created_at_label cascade
+  // from any parent that has those fields set.
+  const cascadeMap = useMemo(() => {
+    // Parse "YYYY Season" labels into a sortable number so we can pick the earliest
+    const SEASON_ORDER: Record<string, number> = { Original: 0, Winter: 1, Spring: 2, Summer: 3, Fall: 4 };
+    function labelRank(label: string): number {
+      const parts = label.split(" ");
+      const year = parseInt(parts[0], 10) || 0;
+      const season = SEASON_ORDER[parts[1]] ?? 0;
+      return year * 10 + season;
+    }
+
+    const map = new Map<number, CascadeInfo>();
+
+    function getOrCreate(id: number): CascadeInfo {
+      let info = map.get(id);
+      if (!info) {
+        info = { onMenuBy: [], creator: null, createdAtLabel: null };
+        map.set(id, info);
+      }
+      return info;
+    }
+
+    // Track the earliest created_at_label rank for the creator separately,
+    // so we pick the earliest parent that actually HAS a creator value.
+    const creatorRank = new Map<number, number>();
+
+    for (const r of recipes) {
+      for (const ing of r.recipe_ingredients) {
+        if (ing.type !== "Prep recipe" || !ing.reference_guid) continue;
+        const prepRecipe = guidToRecipe.get(ing.reference_guid);
+        if (!prepRecipe) continue;
+
+        const info = getOrCreate(prepRecipe.id);
+        if (r.on_menu && !info.onMenuBy.includes(r.name)) {
+          info.onMenuBy.push(r.name);
+        }
+        // Pick the earliest created_at_label across all parents
+        if (r.created_at_label) {
+          if (!info.createdAtLabel || labelRank(r.created_at_label) < labelRank(info.createdAtLabel)) {
+            info.createdAtLabel = r.created_at_label;
+          }
+        }
+        // Pick creator from the earliest parent that has one
+        if (r.creator) {
+          const rank = r.created_at_label ? labelRank(r.created_at_label) : Infinity;
+          const prevRank = creatorRank.get(prepRecipe.id) ?? Infinity;
+          if (!info.creator || rank < prevRank) {
+            info.creator = r.creator;
+            creatorRank.set(prepRecipe.id, rank);
+          }
+        }
+      }
+    }
+
+    // Remove entries that have nothing to cascade
+    for (const [id, info] of map) {
+      if (info.onMenuBy.length === 0 && !info.creator && !info.createdAtLabel) {
+        map.delete(id);
+      }
+    }
+
+    return map;
+  }, [recipes, guidToRecipe]);
+
+  // Convenience accessors
+  const cascadedOnMenuBy = useCallback(
+    (id: number) => {
+      const info = cascadeMap.get(id);
+      return info && info.onMenuBy.length > 0 ? info.onMenuBy : undefined;
+    },
+    [cascadeMap],
+  );
+
+  // Effective on_menu: true if manually set OR cascaded from a parent
+  const isEffectivelyOnMenu = useCallback(
+    (recipe: Recipe) => recipe.on_menu || !!cascadedOnMenuBy(recipe.id),
+    [cascadedOnMenuBy],
+  );
+
   // Filter + search
   const filtered = useMemo(() => {
     let list = recipes;
@@ -311,13 +398,13 @@ export function RecipeList({
       const q = search.toLowerCase();
       list = list.filter((r) => r.name.toLowerCase().includes(q));
     }
-    if (filterOnMenu === "yes") list = list.filter((r) => r.on_menu);
-    if (filterOnMenu === "no") list = list.filter((r) => !r.on_menu);
-    if (filterCreator) list = list.filter((r) => r.creator === filterCreator);
-    if (filterCreatedAt) list = list.filter((r) => r.created_at_label === filterCreatedAt);
+    if (filterOnMenu === "yes") list = list.filter((r) => isEffectivelyOnMenu(r));
+    if (filterOnMenu === "no") list = list.filter((r) => !isEffectivelyOnMenu(r));
+    if (filterCreator) list = list.filter((r) => (cascadeMap.get(r.id)?.creator ?? r.creator) === filterCreator);
+    if (filterCreatedAt) list = list.filter((r) => (cascadeMap.get(r.id)?.createdAtLabel ?? r.created_at_label) === filterCreatedAt);
 
     return list;
-  }, [recipes, search, filterOnMenu, filterCreator, filterCreatedAt]);
+  }, [recipes, search, filterOnMenu, isEffectivelyOnMenu, cascadeMap, filterCreator, filterCreatedAt]);
 
   const groups = useMemo(
     () => sortGroups([...new Set(filtered.map((r) => r.recipe_group || "Uncategorized"))]),
@@ -357,10 +444,17 @@ export function RecipeList({
   }, [scrollTargetId, activeTab]);
 
   // Sort within groups
+  function effectiveValue(recipe: Recipe, key: SortKey): unknown {
+    if (key === "on_menu") return recipe.on_menu || !!cascadedOnMenuBy(recipe.id);
+    if (key === "creator") return cascadeMap.get(recipe.id)?.creator ?? recipe.creator;
+    if (key === "created_at_label") return cascadeMap.get(recipe.id)?.createdAtLabel ?? recipe.created_at_label;
+    return recipe[key];
+  }
+
   function sortRecipes(list: Recipe[]): Recipe[] {
     if (!sort) return list;
     return [...list].sort((a, b) =>
-      compare(a[sort.key], b[sort.key], sort.dir),
+      compare(effectiveValue(a, sort.key), effectiveValue(b, sort.key), sort.dir),
     );
   }
 
@@ -644,6 +738,7 @@ export function RecipeList({
                 onToggle={() => toggleExpanded(recipe.id)}
                 guidToRecipe={guidToRecipe}
                 usedIn={usedInMap.get(recipe.id)}
+                cascade={cascadeMap.get(recipe.id)}
                 onNavigate={navigateToRecipe}
                 creatorOptions={creatorOptions}
                 createdAtOptions={createdAtOptions}
@@ -715,6 +810,7 @@ export function RecipeList({
                         onToggle={() => toggleExpanded(recipe.id)}
                         guidToRecipe={guidToRecipe}
                         usedIn={usedInMap.get(recipe.id)}
+                        cascade={cascadeMap.get(recipe.id)}
                         onNavigate={navigateToRecipe}
                         creatorOptions={creatorOptions}
                         createdAtOptions={createdAtOptions}
@@ -743,6 +839,7 @@ function MobileRecipeCard({
   onToggle,
   guidToRecipe,
   usedIn,
+  cascade,
   onNavigate,
   creatorOptions,
   createdAtOptions,
@@ -754,12 +851,18 @@ function MobileRecipeCard({
   onToggle: () => void;
   guidToRecipe: Map<string, Recipe>;
   usedIn?: { id: number; name: string; group: string }[];
+  cascade?: CascadeInfo;
   onNavigate: (recipeId: number) => void;
   creatorOptions: string[];
   createdAtOptions: string[];
   onUpdate: (id: number, field: string, value: unknown) => void;
 }) {
   const hasIngredients = recipe.recipe_ingredients?.length > 0;
+  const cascadedBy = cascade && cascade.onMenuBy.length > 0 ? cascade.onMenuBy : undefined;
+  const creatorIsCascaded = !!cascade?.creator;
+  const createdAtIsCascaded = !!cascade?.createdAtLabel;
+  const effectiveCreator = creatorIsCascaded ? cascade.creator : recipe.creator;
+  const effectiveCreatedAt = createdAtIsCascaded ? cascade.createdAtLabel : recipe.created_at_label;
 
   return (
     <div
@@ -800,14 +903,18 @@ function MobileRecipeCard({
         </div>
         <div className="flex gap-1 shrink-0">
           <Badge
-            variant={recipe.on_menu ? "default" : "outline"}
-            className="text-[10px] px-1.5 cursor-pointer"
+            variant={recipe.on_menu || cascadedBy ? "default" : "outline"}
+            className={cn(
+              "text-[10px] px-1.5",
+              cascadedBy ? "cursor-not-allowed opacity-80" : "cursor-pointer",
+            )}
             onClick={(e) => {
               e.stopPropagation();
-              onUpdate(recipe.id, "on_menu", !recipe.on_menu);
+              if (!cascadedBy) onUpdate(recipe.id, "on_menu", !recipe.on_menu);
             }}
+            title={cascadedBy ? `On menu via: ${cascadedBy.join(", ")}` : undefined}
           >
-            {recipe.on_menu ? "Menu" : "Off"}
+            {cascadedBy ? "Via" : recipe.on_menu ? "Menu" : "Off"}
           </Badge>
           <Badge
             variant={recipe.refrigerate ? "default" : "outline"}
@@ -844,21 +951,33 @@ function MobileRecipeCard({
               )}
               <span className="flex items-center gap-1">
                 <span className="text-muted-foreground">Creator:</span>
-                <EditableCell
-                  value={recipe.creator}
-                  options={creatorOptions}
-                  onSave={(val) => onUpdate(recipe.id, "creator", val)}
-                  placeholder="Add..."
-                />
+                {creatorIsCascaded ? (
+                  <span className="text-sm italic text-muted-foreground" title="Inherited from parent recipe">
+                    {effectiveCreator}
+                  </span>
+                ) : (
+                  <EditableCell
+                    value={recipe.creator}
+                    options={creatorOptions}
+                    onSave={(val) => onUpdate(recipe.id, "creator", val)}
+                    placeholder="Add..."
+                  />
+                )}
               </span>
               <span className="flex items-center gap-1">
                 <span className="text-muted-foreground">Created:</span>
-                <EditableCell
-                  value={recipe.created_at_label}
-                  options={createdAtOptions}
-                  onSave={(val) => onUpdate(recipe.id, "created_at_label", val)}
-                  placeholder="Add..."
-                />
+                {createdAtIsCascaded ? (
+                  <span className="text-sm italic text-muted-foreground" title="Inherited from parent recipe">
+                    {effectiveCreatedAt}
+                  </span>
+                ) : (
+                  <EditableCell
+                    value={recipe.created_at_label}
+                    options={createdAtOptions}
+                    onSave={(val) => onUpdate(recipe.id, "created_at_label", val)}
+                    placeholder="Add..."
+                  />
+                )}
               </span>
             </div>
 
@@ -961,6 +1080,7 @@ function ExpandableRecipeRow({
   onToggle,
   guidToRecipe,
   usedIn,
+  cascade,
   onNavigate,
   creatorOptions,
   createdAtOptions,
@@ -973,11 +1093,18 @@ function ExpandableRecipeRow({
   onToggle: () => void;
   guidToRecipe: Map<string, Recipe>;
   usedIn?: { id: number; name: string; group: string }[];
+  cascade?: CascadeInfo;
   onNavigate: (recipeId: number) => void;
   creatorOptions: string[];
   createdAtOptions: string[];
   onUpdate: (id: number, field: string, value: unknown) => void;
 }) {
+  const cascadedBy = cascade && cascade.onMenuBy.length > 0 ? cascade.onMenuBy : undefined;
+  const creatorIsCascaded = !!cascade?.creator;
+  const createdAtIsCascaded = !!cascade?.createdAtLabel;
+  const effectiveCreator = creatorIsCascaded ? cascade.creator : recipe.creator;
+  const effectiveCreatedAt = createdAtIsCascaded ? cascade.createdAtLabel : recipe.created_at_label;
+
   return (
     <>
       <TableRow
@@ -1011,17 +1138,18 @@ function ExpandableRecipeRow({
           {costBadge(recipe.food_cost_pct)}
         </TableCell>
 
-        {/* On Menu — click to toggle */}
+        {/* On Menu — click to toggle (disabled if cascaded from parent) */}
         <TableCell>
           <Badge
-            variant={recipe.on_menu ? "default" : "outline"}
-            className="cursor-pointer"
+            variant={recipe.on_menu || cascadedBy ? "default" : "outline"}
+            className={cascadedBy ? "cursor-not-allowed opacity-80" : "cursor-pointer"}
             onClick={(e) => {
               e.stopPropagation();
-              onUpdate(recipe.id, "on_menu", !recipe.on_menu);
+              if (!cascadedBy) onUpdate(recipe.id, "on_menu", !recipe.on_menu);
             }}
+            title={cascadedBy ? `On menu via: ${cascadedBy.join(", ")}` : undefined}
           >
-            {recipe.on_menu ? "Yes" : "No"}
+            {cascadedBy ? `Via ${cascadedBy.length > 1 ? `${cascadedBy.length} recipes` : cascadedBy[0]}` : recipe.on_menu ? "Yes" : "No"}
           </Badge>
         </TableCell>
 
@@ -1039,24 +1167,36 @@ function ExpandableRecipeRow({
           </Badge>
         </TableCell>
 
-        {/* Creator — editable */}
+        {/* Creator — editable, or inherited from parent */}
         <TableCell>
-          <EditableCell
-            value={recipe.creator}
-            options={creatorOptions}
-            onSave={(val) => onUpdate(recipe.id, "creator", val)}
-            placeholder="Add..."
-          />
+          {creatorIsCascaded ? (
+            <span className="text-sm italic text-muted-foreground" title="Inherited from parent recipe">
+              {effectiveCreator}
+            </span>
+          ) : (
+            <EditableCell
+              value={recipe.creator}
+              options={creatorOptions}
+              onSave={(val) => onUpdate(recipe.id, "creator", val)}
+              placeholder="Add..."
+            />
+          )}
         </TableCell>
 
-        {/* Created At — editable */}
+        {/* Created At — editable, or inherited from parent */}
         <TableCell>
-          <EditableCell
-            value={recipe.created_at_label}
-            options={createdAtOptions}
-            onSave={(val) => onUpdate(recipe.id, "created_at_label", val)}
-            placeholder="Add..."
-          />
+          {createdAtIsCascaded ? (
+            <span className="text-sm italic text-muted-foreground" title="Inherited from parent recipe">
+              {effectiveCreatedAt}
+            </span>
+          ) : (
+            <EditableCell
+              value={recipe.created_at_label}
+              options={createdAtOptions}
+              onSave={(val) => onUpdate(recipe.id, "created_at_label", val)}
+              placeholder="Add..."
+            />
+          )}
         </TableCell>
       </TableRow>
 

@@ -494,7 +494,7 @@ SLING_ORG_ID=                     # Sling organization ID
 
 | Phase | Status | Scope |
 |-------|--------|-------|
-| **1 — Inventory + Toast** | Done | Dashboard, ingredient-based inventory with expected usage tracking, par levels, unit conversions, count history, low-stock alerts, AI reorder suggestions, daily sync, historical backfill, xtraCHEF recipe sync with lifecycle management, recipe editing (on_menu, creator, refrigerate), menu sales analytics, gift card tracking |
+| **1 — Inventory + Toast** | Done | Dashboard, ingredient-based inventory with expected usage tracking, par levels, unit conversions, count history, low-stock alerts, AI reorder suggestions, daily sync, historical backfill, xtraCHEF recipe sync with lifecycle management, recipe editing (on_menu, creator, refrigerate) with cascading metadata from parent recipes to prep recipes, menu sales analytics, gift card tracking |
 | **2 — QBO + Sales Tax** | Partial | NYC ST-100 tax computation works (MCP tool + lib/tax); QBO integration and filing automation not yet implemented |
 | **3 — Sling + Payroll** | Not started | AI scheduling, time entry tracking, payroll pre-fill (env vars reserved, no integration code yet) |
 | **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling, vector-based document search with embedding cache |
