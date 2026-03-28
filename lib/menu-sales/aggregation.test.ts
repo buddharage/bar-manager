@@ -4,6 +4,8 @@ import {
   isBeerOrWineCategory,
   preferredCategory,
   computeCases,
+  compareCategoryOrder,
+  PRIORITY_CATEGORIES,
 } from "./aggregation";
 
 // ─── normalizeItemName ────────────────────────────────────────────────
@@ -164,5 +166,37 @@ describe("computeCases", () => {
 
   it("works with subcategories like Draft Beer", () => {
     expect(computeCases(48, "Draft Beer")).toBe(2);
+  });
+});
+
+// ─── compareCategoryOrder ────────────────────────────────────────────
+describe("compareCategoryOrder", () => {
+  it("sorts priority categories in the defined order", () => {
+    const shuffled = ["Snacks", "House Cocktails", "Beverages", "Happy Hour", "Bottle / Can Beer"];
+    const sorted = [...shuffled].sort(compareCategoryOrder);
+    expect(sorted).toEqual(PRIORITY_CATEGORIES);
+  });
+
+  it("places priority categories before non-priority ones", () => {
+    const cats = ["Shots", "House Cocktails", "Wine"];
+    const sorted = [...cats].sort(compareCategoryOrder);
+    expect(sorted).toEqual(["House Cocktails", "Shots", "Wine"]);
+  });
+
+  it("sorts non-priority categories alphabetically", () => {
+    const cats = ["Wine", "Shots", "Draft Beer", "Cocktails"];
+    const sorted = [...cats].sort(compareCategoryOrder);
+    expect(sorted).toEqual(["Cocktails", "Draft Beer", "Shots", "Wine"]);
+  });
+
+  it("handles mix of priority and non-priority categories", () => {
+    const cats = ["Wine", "Happy Hour", "Shots", "House Cocktails", "Beverages", "Cocktails"];
+    const sorted = [...cats].sort(compareCategoryOrder);
+    expect(sorted).toEqual(["House Cocktails", "Beverages", "Happy Hour", "Cocktails", "Shots", "Wine"]);
+  });
+
+  it("returns 0 for identical categories", () => {
+    expect(compareCategoryOrder("Wine", "Wine")).toBe(0);
+    expect(compareCategoryOrder("House Cocktails", "House Cocktails")).toBe(0);
   });
 });

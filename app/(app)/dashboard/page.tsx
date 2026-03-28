@@ -46,7 +46,7 @@ interface DashboardData {
   }[];
   lastSync: { status: string; started_at: string } | null;
   ingredients: { id: number; par_level: number | null; expected_quantity: number | null; last_counted_at: string | null }[];
-  topItems: { name: string; quantity: number; revenue: number }[];
+  topItems: { name: string; quantity: number; revenue: number; subItems?: { name: string; quantity: number; revenue: number }[] }[];
   queryErrors: string[];
 }
 
@@ -57,6 +57,7 @@ export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -451,23 +452,54 @@ export default function DashboardPage() {
                 No order data available yet.
               </p>
             ) : (
-              <div className="space-y-3">
-                {topItems.map((item, i) => (
-                  <div key={item.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-sm font-medium text-muted-foreground w-5 shrink-0">
-                        {i + 1}.
-                      </span>
-                      <span className="text-sm font-medium truncate">{item.name}</span>
+              <div className="space-y-1">
+                {topItems.map((item, i) => {
+                  const isExpanded = expandedItems.has(item.name);
+                  const hasSubItems = !!item.subItems;
+                  return (
+                    <div key={item.name}>
+                      <div
+                        className={`flex items-center justify-between py-1.5 ${hasSubItems ? "cursor-pointer hover:bg-muted/50 rounded-md px-1 -mx-1" : ""}`}
+                        onClick={hasSubItems ? () => setExpandedItems((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(item.name)) next.delete(item.name);
+                          else next.add(item.name);
+                          return next;
+                        }) : undefined}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {hasSubItems && (
+                            <span className="text-xs text-muted-foreground w-4 shrink-0">{isExpanded ? "▼" : "▸"}</span>
+                          )}
+                          {!hasSubItems && <span className="w-4 shrink-0" />}
+                          <span className="text-sm font-medium text-muted-foreground w-5 shrink-0">
+                            {i + 1}.
+                          </span>
+                          <span className="text-sm font-medium truncate">{item.name}</span>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <span className="text-sm text-muted-foreground">{item.quantity} sold</span>
+                          <span className="text-sm font-medium w-20 text-right">
+                            {formatCurrency(item.revenue)}
+                          </span>
+                        </div>
+                      </div>
+                      {isExpanded && item.subItems && (
+                        <div className="ml-11 space-y-1 mb-1">
+                          {item.subItems.map((sub) => (
+                            <div key={sub.name} className="flex items-center justify-between py-0.5 text-muted-foreground">
+                              <span className="text-xs truncate">{sub.name}</span>
+                              <div className="flex items-center gap-4 shrink-0">
+                                <span className="text-xs">{sub.quantity} sold</span>
+                                <span className="text-xs w-20 text-right">{formatCurrency(sub.revenue)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-4 shrink-0">
-                      <span className="text-sm text-muted-foreground">{item.quantity} sold</span>
-                      <span className="text-sm font-medium w-20 text-right">
-                        {formatCurrency(item.revenue)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

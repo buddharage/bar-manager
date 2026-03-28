@@ -84,19 +84,47 @@ export async function GET(request: NextRequest) {
     if (ingredientsSummaryResult.error) queryErrors.push(`Ingredients: ${ingredientsSummaryResult.error.message}`);
     if (topItemsResult.error) queryErrors.push(`Top items: ${topItemsResult.error.message}`);
 
-    // Aggregate top items using the same normalization as menu-sales
-    const topItemsMap = new Map<string, { name: string; quantity: number; revenue: number }>();
+    // Aggregate top items using the same normalization as menu-sales,
+    // tracking sub-items so the UI can show expandable breakdowns.
+    const topItemsMap = new Map<string, {
+      name: string;
+      quantity: number;
+      revenue: number;
+      subItems: Map<string, { name: string; quantity: number; revenue: number }>;
+    }>();
     for (const item of topItemsResult.data || []) {
       const canonicalName = normalizeItemName(item.name, item.category ?? undefined);
       const existing = topItemsMap.get(canonicalName);
       if (existing) {
         existing.quantity += item.quantity;
         existing.revenue += item.revenue;
+        const sub = existing.subItems.get(item.name);
+        if (sub) {
+          sub.quantity += item.quantity;
+          sub.revenue += item.revenue;
+        } else {
+          existing.subItems.set(item.name, { name: item.name, quantity: item.quantity, revenue: item.revenue });
+        }
       } else {
-        topItemsMap.set(canonicalName, { name: canonicalName, quantity: item.quantity, revenue: item.revenue });
+        topItemsMap.set(canonicalName, {
+          name: canonicalName,
+          quantity: item.quantity,
+          revenue: item.revenue,
+          subItems: new Map([[item.name, { name: item.name, quantity: item.quantity, revenue: item.revenue }]]),
+        });
       }
     }
     const topItems = Array.from(topItemsMap.values())
+      .map((g) => {
+        const subItems = Array.from(g.subItems.values()).sort((a, b) => b.quantity - a.quantity);
+        const isAggregated = subItems.length > 1;
+        return {
+          name: isAggregated ? `${g.name} (aggregated)` : g.name,
+          quantity: g.quantity,
+          revenue: g.revenue,
+          ...(isAggregated ? { subItems } : {}),
+        };
+      })
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
 

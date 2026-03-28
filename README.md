@@ -541,7 +541,7 @@ lib/
   inventory/              Expected inventory calculation engine
   notifications/          Push notification sending (web-push) + client-side SW registration
   sync/                   Toast order sync + xtraCHEF recipe sync logic
-  menu-sales/             Date range presets, filtering, item normalization, and case computation
+  menu-sales/             Date range presets, filtering, item normalization, case computation, and category ordering
   units.ts                Unit conversion (ml/oz/volume/weight + purchase units)
   ai/
     agent.ts              Gemini Flash agent with function-calling tools
