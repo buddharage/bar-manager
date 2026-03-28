@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock server-only Supabase client (transitive dep via notifications/push)
+vi.mock("@/lib/supabase/server", () => ({
+  createServerClient: vi.fn(() => ({
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+    })),
+  })),
+}));
+
 // Dynamic import for path alias resolution
 const { recalculateExpectedInventory } = await import("./expected");
 

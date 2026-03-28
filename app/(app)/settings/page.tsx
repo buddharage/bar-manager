@@ -49,11 +49,36 @@ function SettingsContent() {
     setSyncLogs((data as SyncLogEntry[]) || []);
   }, []);
 
+  const checkGoogleConnection = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/google/status");
+      const data = await res.json();
+      setGoogleConnected(data.connected);
+    } catch {
+      setGoogleConnected(false);
+    }
+  }, []);
+
+  const loadXtrachefStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sync/xtrachef");
+      if (res.ok) {
+        const data = await res.json();
+        setXtrachefStatus(data);
+      }
+    } catch {
+      // Table may not exist yet
+    }
+  }, []);
+
+  // Initial data load — async fetches set state on resolution, not synchronously
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     loadSyncLogs();
     checkGoogleConnection();
     loadXtrachefStatus();
-  }, [loadSyncLogs]);
+  }, [loadSyncLogs, checkGoogleConnection, loadXtrachefStatus]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Poll sync logs every 3s while a sync is in progress
   useEffect(() => {
@@ -64,7 +89,8 @@ function SettingsContent() {
 
   // Subscribe to sync_logs changes via Supabase Realtime for external syncs
   useEffect(() => {
-    const channel = supabaseRef.current
+    const supabase = supabaseRef.current;
+    const channel = supabase
       .channel("sync_logs_changes")
       .on(
         "postgres_changes",
@@ -72,10 +98,11 @@ function SettingsContent() {
         () => { loadSyncLogs(); }
       )
       .subscribe();
-    return () => { supabaseRef.current.removeChannel(channel); };
+    return () => { supabase.removeChannel(channel); };
   }, [loadSyncLogs]);
 
   // Show connection result from OAuth callback
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const googleStatus = searchParams.get("google");
     if (googleStatus === "connected") {
@@ -86,16 +113,8 @@ function SettingsContent() {
       setGoogleError(message);
     }
   }, [searchParams]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  async function checkGoogleConnection() {
-    try {
-      const res = await fetch("/api/auth/google/status");
-      const data = await res.json();
-      setGoogleConnected(data.connected);
-    } catch {
-      setGoogleConnected(false);
-    }
-  }
 
   async function triggerSync() {
     setSyncing(true);
@@ -143,17 +162,6 @@ function SettingsContent() {
     setGoogleConnected(false);
   }
 
-  async function loadXtrachefStatus() {
-    try {
-      const res = await fetch("/api/sync/xtrachef");
-      if (res.ok) {
-        const data = await res.json();
-        setXtrachefStatus(data);
-      }
-    } catch {
-      // Table may not exist yet
-    }
-  }
 
   async function saveXtrachefToken() {
     if (!xtrachefToken.trim()) return;
