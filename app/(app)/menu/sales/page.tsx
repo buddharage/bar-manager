@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { type DatePreset, getDateRange } from "@/lib/menu-sales/date-filters";
-import { computeCases } from "@/lib/menu-sales/aggregation";
+import { computeCases, compareCategoryOrder } from "@/lib/menu-sales/aggregation";
 
 type SortField = "name" | "quantity" | "revenue";
 type SortDirection = "asc" | "desc";
@@ -89,7 +89,7 @@ export default function MenuSalesPage() {
   const [latestDataDate, setLatestDataDate] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("quantity");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  const [groupBy, setGroupBy] = useState<GroupBy>("category");
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpanded = (name: string) => {
@@ -188,7 +188,7 @@ export default function MenuSalesPage() {
       map.get(key)!.push(item);
     }
 
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return Array.from(map.entries()).sort(([a], [b]) => compareCategoryOrder(a, b));
   }, [sortedItems, groupBy]);
 
   const hasCategories = useMemo(() => {

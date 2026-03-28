@@ -6,7 +6,13 @@ import { RecipeList } from "@/components/recipe-list";
 
 export const dynamic = "force-dynamic";
 
-export default async function RecipesPage() {
+export default async function RecipesPage({
+  params,
+}: {
+  params: Promise<{ group?: string[] }>;
+}) {
+  const { group: groupSegments } = await params;
+  const initialGroup = groupSegments?.[0] || null;
   const supabase = createServerClient();
 
   const { data: recipes, error } = await supabase
@@ -108,7 +114,7 @@ export default async function RecipesPage() {
           </CardContent>
         </Card>
       ) : (
-        <RecipeList recipes={allRecipes} />
+        <RecipeList recipes={allRecipes} initialGroup={initialGroup} />
       )}
     </div>
   );

@@ -49,6 +49,28 @@ export function preferredCategory(existing: string, incoming: string): string {
   return existing;
 }
 
+/** Categories that should appear first (in this order) when grouping by category. */
+export const PRIORITY_CATEGORIES = [
+  "House Cocktails",
+  "Bottle / Can Beer",
+  "Beverages",
+  "Happy Hour",
+  "Snacks",
+];
+
+/**
+ * Compare function for sorting category names. Priority categories come first
+ * in the order defined above; everything else sorts alphabetically after them.
+ */
+export function compareCategoryOrder(a: string, b: string): number {
+  const ai = PRIORITY_CATEGORIES.indexOf(a);
+  const bi = PRIORITY_CATEGORIES.indexOf(b);
+  if (ai !== -1 && bi !== -1) return ai - bi;
+  if (ai !== -1) return -1;
+  if (bi !== -1) return 1;
+  return a.localeCompare(b);
+}
+
 /**
  * Compute the number of cases for a menu item based on its category.
  * Beer = 24 per case, wine = 12 per case, others = no cases.

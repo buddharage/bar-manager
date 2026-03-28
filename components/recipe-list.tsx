@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -15,6 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Printer } from "lucide-react";
+import { RECIPE_GROUPS } from "@/lib/constants/recipe-groups";
 
 interface RecipeIngredient {
   id: number;
@@ -213,18 +214,40 @@ function groupSlug(group: string) {
   return group.replace(/\s+/g, "-").toLowerCase();
 }
 
+const PRIORITY_GROUPS: string[] = [
+  RECIPE_GROUPS.HOUSE_COCKTAILS,
+  RECIPE_GROUPS.COCKTAIL_BATCH,
+  RECIPE_GROUPS.MOCKTAILS,
+  RECIPE_GROUPS.COCKTAIL,
+  RECIPE_GROUPS.BEER,
+];
+
+function sortGroups(groups: string[]): string[] {
+  const priority = groups.filter((g) => PRIORITY_GROUPS.includes(g));
+  const rest = groups.filter((g) => !PRIORITY_GROUPS.includes(g));
+  priority.sort((a, b) => PRIORITY_GROUPS.indexOf(a) - PRIORITY_GROUPS.indexOf(b));
+  rest.sort((a, b) => a.localeCompare(b));
+  return [...priority, ...rest];
+}
+
 // ---------------------------------------------------------------------------
 // Main RecipeList component
 // ---------------------------------------------------------------------------
 
 const COL_COUNT = 8; // total visible columns
 
-export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
+export function RecipeList({
+  recipes: initialRecipes,
+  initialGroup,
+}: {
+  recipes: Recipe[];
+  initialGroup?: string | null;
+}) {
   const [recipes, setRecipes] = useState(initialRecipes);
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
-  const [activeTab, setActiveTab] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<string>(initialGroup || "");
   const [scrollTargetId, setScrollTargetId] = useState<number | null>(null);
   const [highlightId, setHighlightId] = useState<number | null>(null);
 
@@ -232,7 +255,7 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Filters
-  const [filterOnMenu, setFilterOnMenu] = useState<"" | "yes" | "no">("");
+  const [filterOnMenu, setFilterOnMenu] = useState<"" | "yes" | "no">("yes");
   const [filterCreator, setFilterCreator] = useState("");
   const [filterCreatedAt, setFilterCreatedAt] = useState("");
 
@@ -297,16 +320,25 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
   }, [recipes, search, filterOnMenu, filterCreator, filterCreatedAt]);
 
   const groups = useMemo(
-    () => [...new Set(filtered.map((r) => r.recipe_group || "Uncategorized"))],
+    () => sortGroups([...new Set(filtered.map((r) => r.recipe_group || "Uncategorized"))]),
     [filtered],
   );
 
-  // Set initial active tab
+  // Set initial active tab (fallback when no slug in URL or slug doesn't match)
   useEffect(() => {
     if (groups.length > 0 && (!activeTab || !groups.some((g) => groupSlug(g) === activeTab))) {
       setActiveTab(groupSlug(groups[0]));
     }
   }, [groups, activeTab]);
+
+  // Sync URL when active tab changes
+  useEffect(() => {
+    if (!activeTab) return;
+    const path = activeTab ? `/recipes/${activeTab}` : "/recipes";
+    if (window.location.pathname !== path) {
+      window.history.replaceState(null, "", path);
+    }
+  }, [activeTab]);
 
   // Scroll to target recipe after tab switch + render
   useEffect(() => {
@@ -400,6 +432,17 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
 
   const hasActiveFilters = filterOnMenu || filterCreator || filterCreatedAt;
 
+  // Build print URL with the active category's recipe IDs
+  const printUrl = useMemo(() => {
+    const group = groups.find((g) => groupSlug(g) === activeTab);
+    if (!group) return "/recipes/print";
+    const categoryRecipes = filtered.filter(
+      (r) => (r.recipe_group || "Uncategorized") === group,
+    );
+    const ids = categoryRecipes.map((r) => r.id).join(",");
+    return `/recipes/print?ids=${ids}&category=${encodeURIComponent(group)}`;
+  }, [filtered, groups, activeTab]);
+
   // Active group's recipes (used for mobile rendering)
   const activeGroupRecipes = useMemo(() => {
     const group = groups.find((g) => groupSlug(g) === activeTab);
@@ -477,6 +520,16 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
           Clear filters
         </Button>
       )}
+
+      <a
+        href={printUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+      >
+        <Printer className="h-3.5 w-3.5" />
+        Print
+      </a>
     </div>
   );
 
@@ -575,77 +628,68 @@ export function RecipeList({ recipes: initialRecipes }: { recipes: Recipe[] }) {
         </div>
       )}
 
-      {/* Desktop: category tabs + sortable table */}
+      {/* Desktop: category dropdown + sortable table */}
       {!isMobile && groups.length > 0 && (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList variant="line" className="flex flex-wrap gap-1 w-full justify-start">
+        <div className="space-y-4">
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
+          >
             {groups.map((group) => {
               const count = filtered.filter(
                 (r) => (r.recipe_group || "Uncategorized") === group,
               ).length;
               return (
-                <TabsTrigger key={group} value={groupSlug(group)}>
-                  {group}
-                  <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">
-                    {count}
-                  </Badge>
-                </TabsTrigger>
+                <option key={group} value={groupSlug(group)}>
+                  {group} ({count})
+                </option>
               );
             })}
-          </TabsList>
+          </select>
 
-          {groups.map((group) => {
-            const groupRecipes = sortRecipes(
-              filtered.filter((r) => (r.recipe_group || "Uncategorized") === group),
-            );
+          <Card>
+            <CardContent className="pt-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
+                    <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
+                    <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
+                    <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
+                    <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
+                    <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
+                    <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
+                    <SortableHead label="Created At" sortKey="created_at_label" currentSort={sort} onSort={handleSort} />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeGroupRecipes.map((recipe) => {
+                    const hasIngredients = recipe.recipe_ingredients?.length > 0;
+                    const isExpanded = expandedIds.has(recipe.id);
 
-            return (
-              <TabsContent key={group} value={groupSlug(group)}>
-                <Card>
-                  <CardContent className="pt-4">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
-                          <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
-                          <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
-                          <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
-                          <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
-                          <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
-                          <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
-                          <SortableHead label="Created At" sortKey="created_at_label" currentSort={sort} onSort={handleSort} />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {groupRecipes.map((recipe) => {
-                          const hasIngredients = recipe.recipe_ingredients?.length > 0;
-                          const isExpanded = expandedIds.has(recipe.id);
-
-                          return (
-                            <ExpandableRecipeRow
-                              key={recipe.id}
-                              recipe={recipe}
-                              hasIngredients={hasIngredients}
-                              isExpanded={isExpanded}
-                              isHighlighted={highlightId === recipe.id}
-                              onToggle={() => toggleExpanded(recipe.id)}
-                              guidToRecipe={guidToRecipe}
-                              usedIn={usedInMap.get(recipe.id)}
-                              onNavigate={navigateToRecipe}
-                              creatorOptions={creatorOptions}
-                              createdAtOptions={createdAtOptions}
-                              onUpdate={updateRecipe}
-                            />
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            );
-          })}
-        </Tabs>
+                    return (
+                      <ExpandableRecipeRow
+                        key={recipe.id}
+                        recipe={recipe}
+                        hasIngredients={hasIngredients}
+                        isExpanded={isExpanded}
+                        isHighlighted={highlightId === recipe.id}
+                        onToggle={() => toggleExpanded(recipe.id)}
+                        guidToRecipe={guidToRecipe}
+                        usedIn={usedInMap.get(recipe.id)}
+                        onNavigate={navigateToRecipe}
+                        creatorOptions={creatorOptions}
+                        createdAtOptions={createdAtOptions}
+                        onUpdate={updateRecipe}
+                      />
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
