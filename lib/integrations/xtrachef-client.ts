@@ -242,64 +242,81 @@ export class XtrachefClient {
 
   /**
    * Fetch all recipes with their ingredients.
-   * Makes 1 summary call + N detail calls (one per recipe).
+   * Makes 1 summary call + N detail calls (batched with concurrency).
    */
   async fetchAllRecipes(opts?: {
     onProgress?: (done: number, total: number) => void;
+    concurrency?: number;
   }): Promise<FullRecipe[]> {
     const summaries = await this.fetchRecipeSummaries();
     const total = summaries.length;
     const results: FullRecipe[] = [];
+    const concurrency = opts?.concurrency ?? 5;
+    let done = 0;
 
-    for (let i = 0; i < summaries.length; i++) {
-      const summary = summaries[i];
-      opts?.onProgress?.(i + 1, total);
+    for (let i = 0; i < summaries.length; i += concurrency) {
+      const batch = summaries.slice(i, i + concurrency);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (summary) => {
+          const detail = await this.fetchRecipeDetail(summary.recipeId);
+          return { summary, detail };
+        }),
+      );
 
-      try {
-        const detail = await this.fetchRecipeDetail(summary.recipeId);
+      for (const result of batchResults) {
+        done++;
+        opts?.onProgress?.(done, total);
 
-        const type: "recipe" | "prep_recipe" =
-          summary.type === "Prep Recipe" ? "prep_recipe" : "recipe";
+        if (result.status === "rejected") {
+          console.error(`  Failed to fetch recipe detail:`, result.reason);
+          continue;
+        }
 
-        // Extract English instructions from procedure
-        const englishInstructions = detail.procedure?.instructions
-          ?.find((i) => i.type === "English")?.data || null;
+        const { summary, detail } = result.value;
 
-        const recipe: RecipeRow = {
-          xtrachef_id: summary.recipeId,
-          xtrachef_guid: summary.guid,
-          name: detail.name,
-          type,
-          recipe_group: summary.recipeGroups || detail.basicDetail.recipeGroup || null,
-          menu_price: parseNum(summary.menuPrice),
-          prime_cost: parseNum(summary.primeCost),
-          food_cost_pct: parseNum(summary.foodCostPercent),
-          toast_item_guid: detail.basicDetail.externalMenuItemGuid || summary.externalMenuItemGuid || null,
-          serving_size: detail.basicDetail.servingSize || null,
-          batch_size: detail.basicDetail.batchSize || null,
-          batch_uom: detail.basicDetail.batchUomName || null,
-          notes: detail.basicDetail.notes || null,
-          image_url: detail.procedure?.imageUrl || null,
-          instructions: englishInstructions || null,
-          last_modified_at: detail.lastModified ? new Date(detail.lastModified).toISOString() : null,
-          last_modified_by: detail.lastModifiedBy || summary.lastModifiedBy || null,
-        };
+        try {
+          const type: "recipe" | "prep_recipe" =
+            summary.type === "Prep Recipe" ? "prep_recipe" : "recipe";
 
-        const ingredients: RecipeIngredientRow[] = (detail.ingredients || []).map((ing) => ({
-          xtrachef_id: ing.id,
-          name: ing.name,
-          type: ing.type,
-          quantity: ing.quantity ?? null,
-          uom: ing.uom || null,
-          cost: ing.cost ?? null,
-          reference_id: ing.referenceId || null,
-          reference_guid: ing.referenceGuid || null,
-          ingredient_yield: ing.ingredientYield ?? null,
-        }));
+          const englishInstructions = detail.procedure?.instructions
+            ?.find((i) => i.type === "English")?.data || null;
 
-        results.push({ recipe, ingredients });
-      } catch (err) {
-        console.error(`  Failed to fetch recipe "${summary.recipe}" (${summary.recipeId}):`, err);
+          const recipe: RecipeRow = {
+            xtrachef_id: summary.recipeId,
+            xtrachef_guid: summary.guid,
+            name: detail.name,
+            type,
+            recipe_group: summary.recipeGroups || detail.basicDetail.recipeGroup || null,
+            menu_price: parseNum(summary.menuPrice),
+            prime_cost: parseNum(summary.primeCost),
+            food_cost_pct: parseNum(summary.foodCostPercent),
+            toast_item_guid: detail.basicDetail.externalMenuItemGuid || summary.externalMenuItemGuid || null,
+            serving_size: detail.basicDetail.servingSize || null,
+            batch_size: detail.basicDetail.batchSize || null,
+            batch_uom: detail.basicDetail.batchUomName || null,
+            notes: detail.basicDetail.notes || null,
+            image_url: detail.procedure?.imageUrl || null,
+            instructions: englishInstructions || null,
+            last_modified_at: detail.lastModified ? new Date(detail.lastModified).toISOString() : null,
+            last_modified_by: detail.lastModifiedBy || summary.lastModifiedBy || null,
+          };
+
+          const ingredients: RecipeIngredientRow[] = (detail.ingredients || []).map((ing) => ({
+            xtrachef_id: ing.id,
+            name: ing.name,
+            type: ing.type,
+            quantity: ing.quantity ?? null,
+            uom: ing.uom || null,
+            cost: ing.cost ?? null,
+            reference_id: ing.referenceId || null,
+            reference_guid: ing.referenceGuid || null,
+            ingredient_yield: ing.ingredientYield ?? null,
+          }));
+
+          results.push({ recipe, ingredients });
+        } catch (err) {
+          console.error(`  Failed to process recipe "${summary.recipe}" (${summary.recipeId}):`, err);
+        }
       }
     }
 

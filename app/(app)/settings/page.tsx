@@ -189,7 +189,18 @@ function SettingsContent() {
     setSyncingXtrachef(true);
     try {
       const res = await fetch("/api/sync/xtrachef", { method: "POST" });
-      const data = await res.json();
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        alert(
+          res.ok
+            ? "xtraCHEF sync failed: received an invalid response from the server."
+            : `xtraCHEF sync failed: server returned ${res.status}. This usually means the request timed out — try again.`,
+        );
+        return;
+      }
       if (data.error) {
         alert(`xtraCHEF sync failed: ${data.error}`);
       } else {
