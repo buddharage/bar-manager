@@ -71,6 +71,7 @@ If the whiteboard is blank or unreadable, say "BLANK" under RAW TEXT and "No con
 
   const extractedText = rawMatch?.[1]?.trim() || aiResponse;
   const summary = summaryMatch?.[1]?.trim() || extractedText;
+  const isBlank = normalizeText(extractedText) === "blank";
 
   // 3. Check if content changed from previous snapshot
   const supabase = createServerClient();
@@ -84,8 +85,9 @@ If the whiteboard is blank or unreadable, say "BLANK" under RAW TEXT and "No con
     .maybeSingle();
 
   const changed =
-    !previous ||
-    normalizeText(previous.extracted_text || "") !== normalizeText(extractedText);
+    !isBlank &&
+    (!previous ||
+      normalizeText(previous.extracted_text || "") !== normalizeText(extractedText));
 
   // 4. Store in database
   const { data: snapshot, error } = await supabase

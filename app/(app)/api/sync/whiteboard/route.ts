@@ -8,7 +8,8 @@ import { broadcastWhiteboardUpdate } from "@/lib/notifications/push";
 function getCurrentETHour(): number {
   const now = new Date();
   const etTime = now.toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false });
-  return parseInt(etTime, 10);
+  const hour = parseInt(etTime, 10);
+  return Number.isNaN(hour) ? 0 : hour;
 }
 
 // Whiteboard camera sync — called by GitHub Actions cron (3x daily) or manual trigger

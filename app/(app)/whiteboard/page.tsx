@@ -5,12 +5,9 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
-
 interface WhiteboardSnapshot {
   id: number;
   captured_at: string;
-  image_url: string | null;
   extracted_text: string | null;
   summary: string | null;
   schedule_label: string | null;
@@ -39,12 +36,17 @@ export default function WhiteboardPage() {
       .select("*")
       .order("captured_at", { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        if (!cancelled) {
-          setSnapshots((data as WhiteboardSnapshot[]) || []);
-          setLoading(false);
-        }
-      });
+      .then(
+        ({ data }) => {
+          if (!cancelled) {
+            setSnapshots((data as WhiteboardSnapshot[]) || []);
+            setLoading(false);
+          }
+        },
+        () => {
+          if (!cancelled) setLoading(false);
+        },
+      );
     return () => { cancelled = true; };
   }, []);
 
@@ -62,6 +64,7 @@ export default function WhiteboardPage() {
     setCaptureResult(null);
     try {
       const res = await fetch("/api/sync/whiteboard", { method: "POST" });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const data = await res.json();
       if (data.error) {
         setCaptureResult({ type: "error", message: data.details || data.error });
@@ -73,11 +76,12 @@ export default function WhiteboardPage() {
             : "Whiteboard captured — no changes since last capture",
         });
       }
+      await loadSnapshots();
     } catch (err) {
       setCaptureResult({ type: "error", message: String(err) });
+    } finally {
+      setCapturing(false);
     }
-    await loadSnapshots();
-    setCapturing(false);
   }
 
   function formatDate(dateStr: string) {
@@ -201,20 +205,6 @@ export default function WhiteboardPage() {
                       {snap.error && (
                         <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                           {snap.error}
-                        </div>
-                      )}
-
-                      {snap.image_url && (
-                        <div>
-                          <h3 className="text-sm font-medium mb-2">Photo</h3>
-                          <Image
-                            src={snap.image_url}
-                            alt={`Whiteboard capture from ${formatTime(snap.captured_at)}`}
-                            width={800}
-                            height={600}
-                            className="rounded border max-w-full h-auto"
-                            unoptimized
-                          />
                         </div>
                       )}
 
