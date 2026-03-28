@@ -16,11 +16,11 @@ export async function GET(request: NextRequest) {
 
   const { data } = await supabase
     .from("notification_preferences")
-    .select("inventory_alerts, chat_responses")
+    .select("inventory_alerts, chat_responses, whiteboard_updates")
     .eq("user_id", userId)
     .maybeSingle();
 
-  return NextResponse.json(data || { inventory_alerts: true, chat_responses: true });
+  return NextResponse.json(data || { inventory_alerts: true, chat_responses: true, whiteboard_updates: true });
 }
 
 export async function PUT(request: NextRequest) {
@@ -39,6 +39,7 @@ export async function PUT(request: NextRequest) {
         user_id: userId,
         inventory_alerts: body.inventory_alerts ?? true,
         chat_responses: body.chat_responses ?? true,
+        whiteboard_updates: body.whiteboard_updates ?? true,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },
