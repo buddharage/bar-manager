@@ -1,3 +1,10 @@
+/**
+ * POST /api/ai/chat
+ *
+ * Sends user messages to the Gemini chat agent and returns the AI response.
+ * Also fires a push notification so the user gets alerted if they've navigated
+ * away — the service worker suppresses it when the chat tab is active.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { chat, type ChatMessage } from "@/lib/ai/agent";
 import { sendPushNotification } from "@/lib/notifications/push";

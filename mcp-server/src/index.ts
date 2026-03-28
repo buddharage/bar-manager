@@ -1,3 +1,15 @@
+/**
+ * Bar Manager MCP Server
+ *
+ * Exposes Supabase bar-operations data (inventory, sales, recipes, employees,
+ * gift cards, tax periods, documents) as MCP tools for Claude CLI.
+ *
+ * Requires SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY.
+ * Optionally uses GEMINI_API_KEY for vector-based document search (falls back to
+ * text search when unavailable or on error).
+ *
+ * Launched via start.sh which sources .env.local before running this file.
+ */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -15,10 +27,12 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ── Helpers ──
 
+/** Round to 2 decimal places (cents precision for dollar amounts). */
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** Generate a 768-dimensional embedding via Gemini for semantic search. */
 async function embedQuery(text: string): Promise<number[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");

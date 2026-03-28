@@ -1,6 +1,11 @@
-// Google Drive + Gmail API Client
-// OAuth2 Authorization Code flow with offline access for refresh tokens
-// Follows the QBO client pattern (lib/integrations/qbo-client.ts)
+/**
+ * Google Drive + Gmail API Client
+ *
+ * Uses OAuth2 Authorization Code flow with offline access for refresh tokens.
+ * Tokens are stored in the Supabase `settings` table and cached in-memory
+ * for 4 minutes to avoid repeated DB lookups. Call `resetTokenCache()` after
+ * long-running sync operations to ensure fresh tokens on the next request.
+ */
 
 import { createServerClient } from "@/lib/supabase/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -38,6 +43,7 @@ export function resetTokenCache(): void {
 // OAuth2 Flow
 // ============================================================
 
+/** Build the Google OAuth2 consent URL with Drive + Gmail read-only scopes. */
 export function getAuthorizationUrl(): string {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -51,6 +57,7 @@ export function getAuthorizationUrl(): string {
   return `${GOOGLE_AUTH_URL}?${params}`;
 }
 
+/** Exchange an authorization code for access + refresh tokens. */
 export async function exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
@@ -102,6 +109,7 @@ async function refreshAccessToken(refreshToken: string): Promise<GoogleTokens> {
   };
 }
 
+/** Return valid tokens, refreshing automatically if expired (with 60s buffer). */
 export async function getValidTokens(): Promise<GoogleTokens> {
   // Return cached tokens if still valid
   if (_cachedTokens && Date.now() < _cacheExpiry) {
