@@ -26,6 +26,7 @@ When using Claude CLI from this directory, the `bar-manager` MCP server provides
 | `query_employees` | Employee list with roles and hourly rates |
 | `query_time_entries` | Labor hours and tips for payroll |
 | `query_recipes` | Recipe lookup with ingredients and costs |
+| `format_recipes_for_xtrachef` | Format recipes with brand preferences for xtraCHEF entry |
 | `query_gift_cards` | Gift card balances and status |
 | `query_sync_logs` | Recent integration sync status |
 | `search_documents` | Semantic search on Google Drive documents |

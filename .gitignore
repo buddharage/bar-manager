@@ -47,9 +47,11 @@ supabase/.temp/
 # mcp server build artifacts
 mcp-server/node_modules
 mcp-server/dist
+mcp-server/.next
 
 # claude code
-.claude/
+.claude/*
+!.claude/commands/
 
 # cocktail images (too large for git)
 cocktail-images/
