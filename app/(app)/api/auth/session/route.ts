@@ -1,3 +1,7 @@
+/**
+ * POST /api/auth/session — Login: validates DASHBOARD_PASSWORD and sets a signed session cookie.
+ * DELETE /api/auth/session — Logout: clears the session cookie.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { createToken, cookieOptions } from "@/lib/auth/session";
 

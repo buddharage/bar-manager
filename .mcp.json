@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "bar-manager": {
+      "command": "bash",
+      "args": ["mcp-server/start.sh"]
+    }
+  }
+}

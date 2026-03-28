@@ -1,6 +1,7 @@
 {
   "name": "willy",
   "version": "0.1.0",
+  "description": "AI-powered operations dashboard for a cocktail bar — integrates Toast POS, Google Workspace, and xtraCHEF for inventory, sales, recipes, and document search",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,6 +1,12 @@
-// Toast POS API Client
-// Uses OAuth2 Client Credentials flow (read-only Standard API access)
-// Docs: https://doc.toasttab.com/openapi
+/**
+ * Toast POS API Client
+ *
+ * Read-only access via OAuth2 Client Credentials flow (Standard tier).
+ * Handles token caching, automatic retry with exponential backoff on 429s,
+ * and response normalization (Toast sometimes wraps arrays in objects).
+ *
+ * @see https://doc.toasttab.com/openapi
+ */
 
 interface ToastTokenResponse {
   token: {
@@ -103,8 +109,10 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.token;
 }
 
+/** Max retry attempts for 429 rate-limit responses (exponential backoff: 2s → 16s). */
 const MAX_RETRIES = 4;
 
+/** Authenticated fetch against Toast API with automatic 429 retry and backoff. */
 async function toastFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const token = await getAccessToken();
   const restaurantGuid = process.env.TOAST_RESTAURANT_GUID!;

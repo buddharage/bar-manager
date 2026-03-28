@@ -44,6 +44,10 @@ next-env.d.ts
 # supabase
 supabase/.temp/
 
+# mcp server build artifacts
+mcp-server/node_modules
+mcp-server/dist
+
 # claude code
 .claude/
 

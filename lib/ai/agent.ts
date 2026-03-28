@@ -7,6 +7,7 @@ import {
 import { createServerClient } from "@/lib/supabase/server";
 import { findSimilarChunks } from "@/lib/ai/embeddings";
 import { searchMessages, getMessageContent, processInBatches } from "@/lib/integrations/google-client";
+import { computeST100 } from "@/lib/tax/st100";
 import {
   getCachedToolResult,
   setCachedToolResult,
@@ -21,6 +22,7 @@ You help with inventory management, sales analysis, scheduling, and general bar 
 You have access to tools to query the bar's database. Use them to answer questions with real data.
 You can search Gmail live for receipts, invoices, and order confirmations using the search_gmail tool.
 Relevant documents from Google Drive are automatically provided as context below when available.
+You can also look up tax periods, compute ST-100 tax worksheets, search recipes, check employee/labor data, and track gift cards.
 Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.`;
 
 // Tool definitions for Gemini function calling
@@ -139,6 +141,106 @@ const tools: Tool[] = [
             },
           },
           required: ["query"],
+        },
+      },
+      {
+        name: "query_tax_periods",
+        description:
+          "Get tax filing periods and their status. Returns period dates, taxable sales, tax collected, tax due, and filing status.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            status: {
+              type: SchemaType.STRING,
+              description: "Filter by status: pending, computed, or filed",
+            },
+          },
+        },
+      },
+      {
+        name: "compute_st100",
+        description:
+          "Compute the NYC ST-100 sales tax worksheet for a date range. Shows state, city, and MCTD tax breakdown.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            start_date: {
+              type: SchemaType.STRING,
+              description: "Start date in YYYY-MM-DD format",
+            },
+            end_date: {
+              type: SchemaType.STRING,
+              description: "End date in YYYY-MM-DD format",
+            },
+          },
+          required: ["start_date", "end_date"],
+        },
+      },
+      {
+        name: "query_recipes",
+        description:
+          "Look up cocktail recipes and prep batches with ingredients and costs.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            name: {
+              type: SchemaType.STRING,
+              description: "Search by recipe name",
+            },
+            type: {
+              type: SchemaType.STRING,
+              description: "Filter by type (e.g., 'cocktail', 'prep_batch')",
+            },
+          },
+        },
+      },
+      {
+        name: "query_employees",
+        description: "Get the employee list with roles and hourly rates.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            active_only: {
+              type: SchemaType.BOOLEAN,
+              description: "If true (default), only show active employees",
+            },
+          },
+        },
+      },
+      {
+        name: "query_time_entries",
+        description:
+          "Get labor hours and tips for a date range. Useful for payroll computation.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            start_date: {
+              type: SchemaType.STRING,
+              description: "Start date in YYYY-MM-DD format",
+            },
+            end_date: {
+              type: SchemaType.STRING,
+              description: "End date in YYYY-MM-DD format",
+            },
+            employee_id: {
+              type: SchemaType.INTEGER,
+              description: "Filter by specific employee ID",
+            },
+          },
+          required: ["start_date", "end_date"],
+        },
+      },
+      {
+        name: "query_gift_cards",
+        description: "Get gift card information including balances and status.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            status: {
+              type: SchemaType.STRING,
+              description: "Filter by status: active, depleted, expired, or voided",
+            },
+          },
         },
       },
     ],
@@ -297,6 +399,105 @@ async function executeTool(
 
       // search_gmail is not cached (always live) — setCachedToolResult is a no-op for it
       return results;
+    }
+
+    case "query_tax_periods": {
+      let query = supabase
+        .from("tax_periods")
+        .select("*")
+        .order("period_start", { ascending: false });
+
+      if (args.status) {
+        query = query.eq("status", args.status);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
+    }
+
+    case "compute_st100": {
+      const { data, error } = await supabase
+        .from("daily_sales")
+        .select("gross_sales, net_sales, tax_collected")
+        .gte("date", args.start_date)
+        .lte("date", args.end_date);
+
+      if (error) throw error;
+      if (!data || data.length === 0) return { error: "No sales data for the specified range" };
+
+      const worksheet = computeST100(data);
+      worksheet.periodStart = args.start_date as string;
+      worksheet.periodEnd = args.end_date as string;
+      setCachedToolResult(name, args, worksheet);
+      return worksheet;
+    }
+
+    case "query_recipes": {
+      let query = supabase
+        .from("recipes")
+        .select("*, recipe_ingredients(*)")
+        .order("name");
+
+      if (args.name) {
+        query = query.ilike("name", `%${args.name}%`);
+      }
+      if (args.type) {
+        query = query.eq("type", args.type);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
+    }
+
+    case "query_employees": {
+      let query = supabase.from("employees").select("*").order("name");
+
+      if (args.active_only !== false) {
+        query = query.eq("active", true);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
+    }
+
+    case "query_time_entries": {
+      let query = supabase
+        .from("time_entries")
+        .select("*, employees(name, role)")
+        .gte("date", args.start_date)
+        .lte("date", args.end_date)
+        .order("date");
+
+      if (args.employee_id !== undefined) {
+        query = query.eq("employee_id", args.employee_id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
+    }
+
+    case "query_gift_cards": {
+      let query = supabase
+        .from("gift_cards")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (args.status) {
+        query = query.eq("status", args.status);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCachedToolResult(name, args, data);
+      return data;
     }
 
     default:

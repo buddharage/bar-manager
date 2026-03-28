@@ -306,9 +306,9 @@ Push notifications require the `push_subscriptions` and `notification_preference
 > - Each browser/device registers its own subscription. Enable notifications on each device you use.
 > - If notifications are "Blocked" in the settings card, you previously denied the browser permission prompt. Reset it in your browser's site settings (click the lock icon in the address bar → Notifications → Allow).
 
-#### PWA next steps
+#### PWA production checklist
 
-The core PWA push notification infrastructure is in place. To get it fully working in production:
+The core PWA push notification infrastructure is in place. These steps ensure it works end-to-end in production:
 
 1. **Generate and deploy VAPID keys** — Run `npx web-push generate-vapid-keys`, add both keys to `.env.local` and Vercel environment variables
 2. **Run migration 013** — Apply `supabase/migrations/013_push_subscriptions.sql` if not already applied
@@ -495,8 +495,8 @@ SLING_ORG_ID=                     # Sling organization ID
 | Phase | Status | Scope |
 |-------|--------|-------|
 | **1 — Inventory + Toast** | Done | Dashboard, ingredient-based inventory with expected usage tracking, par levels, unit conversions, count history, low-stock alerts, AI reorder suggestions, daily sync, historical backfill, xtraCHEF recipe sync with lifecycle management, recipe editing (on_menu, creator, refrigerate), menu sales analytics, gift card tracking |
-| **2 — QBO + Sales Tax** | Stubbed | QuickBooks journal entries, NYC ST-100 tax worksheet, monthly filing reminders |
-| **3 — Sling + Payroll** | Stubbed | AI scheduling, time entry tracking, payroll pre-fill |
+| **2 — QBO + Sales Tax** | Partial | NYC ST-100 tax computation works (MCP tool + lib/tax); QBO integration and filing automation not yet implemented |
+| **3 — Sling + Payroll** | Not started | AI scheduling, time entry tracking, payroll pre-fill (env vars reserved, no integration code yet) |
 | **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling, vector-based document search with embedding cache |
 | **PWA + Push Notifications** | Done | Installable PWA, push notifications for inventory alerts and AI chat responses, per-user notification preferences, nav alert badge |
 | **Google Workspace** | Done | Drive + Gmail sync, document chunking + vector embeddings, semantic document search, AI-powered PDF extraction |
