@@ -42,6 +42,11 @@ async function embedQuery(text: string): Promise<number[]> {
   return data.embedding.values;
 }
 
+/** Escape ILIKE wildcard characters so user input is treated as literal text. */
+function escapeIlike(s: string): string {
+  return s.replace(/[%_\\]/g, "\\$&");
+}
+
 /**
  * Register all bar-manager MCP tools on the given server instance.
  */
@@ -59,7 +64,7 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
       let query = supabase.from("inventory_items").select("*").order("name");
 
       if (category) {
-        query = query.ilike("category", `%${category}%`);
+        query = query.ilike("category", `%${escapeIlike(category)}%`);
       }
       if (low_stock_only) {
         query = query.not("par_level", "is", null);
@@ -125,7 +130,7 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
       for (const item of data || []) {
         const key = item.name;
         const existing = grouped.get(key) || { quantity: 0, revenue: 0 };
-        existing.quantity += item.quantity || 1;
+        existing.quantity += item.quantity ?? 1;
         existing.revenue += item.revenue || 0;
         grouped.set(key, existing);
       }
@@ -305,7 +310,7 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
         .order("name");
 
       if (name) {
-        query = query.ilike("name", `%${name}%`);
+        query = query.ilike("name", `%${escapeIlike(name)}%`);
       }
       if (type) {
         query = query.eq("type", type);
@@ -333,10 +338,10 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
         .order("name");
 
       if (recipe_group) {
-        query = query.ilike("recipe_group", `%${recipe_group}%`);
+        query = query.ilike("recipe_group", `%${escapeIlike(recipe_group)}%`);
       }
       if (name) {
-        query = query.ilike("name", `%${name}%`);
+        query = query.ilike("name", `%${escapeIlike(name)}%`);
       }
 
       const { data, error } = await query;
@@ -357,10 +362,12 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
         const ingredients = (recipe.recipe_ingredients || []).map(
           (ing: { name: string; type: string; quantity: number | null; uom: string | null }) => {
             let ingredientName = ing.name;
-            // Apply brand preferences for generic spirit names
+            // Apply first matching brand preference for generic spirit names
+            const nameLower = ingredientName.toLowerCase();
             for (const [spirit, brand] of Object.entries(brandMap)) {
-              if (ingredientName.toLowerCase().includes(spirit) && !ingredientName.toLowerCase().includes(brand.toLowerCase())) {
+              if (nameLower.includes(spirit) && !nameLower.includes(brand.toLowerCase())) {
                 ingredientName += ` (prefer ${brand})`;
+                break;
               }
             }
             return {
@@ -472,10 +479,11 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
         }
 
         const docIds = [...new Set(data.map((d: { document_id: number }) => d.document_id))];
-        const { data: docs } = await supabase
+        const { data: docs, error: docsError } = await supabase
           .from("documents")
           .select("id, title, metadata")
           .in("id", docIds);
+        if (docsError) throw docsError;
 
         const docMap = new Map<number, { title: string; folder?: string }>();
         for (const d of docs || []) {
@@ -493,15 +501,30 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
         return { content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }] };
       } catch (err) {
         console.error("Embedding search failed, falling back to text search:", err);
-        const { data, error } = await supabase
+        const escaped = escapeIlike(query);
+        const { data: titleMatches, error: titleErr } = await supabase
           .from("documents")
           .select("title, content, metadata")
-          .or(`title.ilike.%${query.replace(/[\\%_,().]/g, "\\$&")}%,content.ilike.%${query.replace(/[\\%_,().]/g, "\\$&")}%`)
+          .ilike("title", `%${escaped}%`)
           .limit(maxResults);
+        if (titleErr) throw titleErr;
+        const { data: contentMatches, error: contentErr } = await supabase
+          .from("documents")
+          .select("title, content, metadata")
+          .ilike("content", `%${escaped}%`)
+          .limit(maxResults);
+        if (contentErr) throw contentErr;
 
-        if (error) throw error;
+        const seen = new Set<string>();
+        const combined: typeof titleMatches = [];
+        for (const doc of [...(titleMatches || []), ...(contentMatches || [])]) {
+          if (!seen.has(doc.title)) {
+            seen.add(doc.title);
+            combined.push(doc);
+          }
+        }
 
-        const results = (data || []).map((doc) => ({
+        const results = combined.slice(0, maxResults).map((doc) => ({
           title: doc.title,
           folder: (doc.metadata as Record<string, string>)?.folder || "",
           content: doc.content?.slice(0, 2000) || "",

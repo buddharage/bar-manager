@@ -7,8 +7,8 @@
  *
  * Uses stateless mode with JSON responses for Vercel serverless compatibility.
  *
- * Set MCP_BEARER_TOKEN in your environment to require authentication.
- * When set, clients must send an `Authorization: Bearer <token>` header.
+ * Requires MCP_BEARER_TOKEN in your environment.
+ * Clients must send an `Authorization: Bearer <token>` header.
  */
 import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -18,7 +18,12 @@ import { registerTools } from "@/lib/mcp-tools";
 
 function authenticate(req: Request): Response | null {
   const token = process.env.MCP_BEARER_TOKEN;
-  if (!token) return null; // no token configured, skip auth
+  if (!token) {
+    return new Response(JSON.stringify({ error: "Server misconfigured: MCP_BEARER_TOKEN not set" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const authHeader = req.headers.get("authorization") ?? "";
   const expected = `Bearer ${token}`;
@@ -39,6 +44,13 @@ function authenticate(req: Request): Response | null {
 async function handleRequest(req: Request): Promise<Response> {
   const authError = authenticate(req);
   if (authError) return authError;
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response(JSON.stringify({ error: "Server misconfigured: Supabase env vars not set" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const server = new McpServer({
     name: "bar-manager",
@@ -62,14 +74,6 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
-export async function GET(req: Request) {
-  return handleRequest(req);
-}
-
 export async function POST(req: Request) {
-  return handleRequest(req);
-}
-
-export async function DELETE(req: Request) {
   return handleRequest(req);
 }
