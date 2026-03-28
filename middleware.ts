@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/api/webhooks/",
   "/api/ai/",
   "/api/mcp",
+  "/.well-known/",
 ];
 
 export async function middleware(request: NextRequest) {

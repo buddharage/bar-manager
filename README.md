@@ -63,6 +63,7 @@ Open `.env.local` in your editor — you'll see sections for each integration. H
 | `TOAST_CLIENT_SECRET` | Yes | Step 5 |
 | `TOAST_RESTAURANT_GUID` | Yes | Step 5 |
 | `TOAST_API_BASE_URL` | Yes | Step 5 (default provided) |
+| `MCP_BEARER_TOKEN` | No | Step 12 (for remote MCP access) |
 | `TOAST_WEBHOOK_SECRET` | No | Step 5 (after deployment) |
 | `GEMINI_API_KEY` | Yes | Step 6 |
 | `GOOGLE_CLIENT_ID` | No | Step 7 |
@@ -467,6 +468,9 @@ TOAST_RESTAURANT_GUID=            # Toast restaurant GUID
 TOAST_API_BASE_URL=               # Toast API base (https://ws-api.toasttab.com)
 GEMINI_API_KEY=                   # Google Gemini API key
 
+# ── MCP Server (remote) ───────────────────────────────────────
+MCP_BEARER_TOKEN=                 # Static bearer token for direct MCP API access
+
 # ── Optional ──────────────────────────────────────────────────
 TOAST_WEBHOOK_SECRET=             # Toast webhook signing secret
 GOOGLE_CLIENT_ID=                 # Google OAuth client ID
@@ -486,6 +490,113 @@ QBO_REALM_ID=                     # QuickBooks company/realm ID
 QBO_REDIRECT_URI=                 # QuickBooks OAuth redirect URI
 SLING_API_TOKEN=                  # Sling scheduling API token
 SLING_ORG_ID=                     # Sling organization ID
+```
+
+---
+
+## MCP Server
+
+The MCP (Model Context Protocol) server exposes bar management tools — inventory, sales, recipes, tax computation, etc. — so Claude can query your bar data directly.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `query_inventory` | Current stock levels, low-stock items, filter by category |
+| `query_sales` | Daily sales data for a date range |
+| `query_top_sellers` | Top menu items by quantity or revenue |
+| `query_alerts` | Unresolved inventory alerts |
+| `query_tax_periods` | Tax filing periods and status |
+| `compute_st100` | NYC ST-100 sales tax worksheet |
+| `query_employees` | Employee list with roles and rates |
+| `query_time_entries` | Labor hours and tips for payroll |
+| `query_recipes` | Recipe lookup with ingredients and costs |
+| `format_recipes_for_xtrachef` | Format recipes for xtraCHEF entry |
+| `query_gift_cards` | Gift card balances and status |
+| `query_sync_logs` | Integration sync status |
+| `search_documents` | Semantic search on Google Drive documents |
+
+### Option A: Local (stdio) — Claude Code CLI
+
+The repo includes a `.mcp.json` that Claude Code picks up automatically. No extra config needed.
+
+```bash
+# Build the local MCP server (one time)
+cd mcp-server && npm run build && cd ..
+
+# Open Claude Code from the project root — it connects automatically
+claude
+```
+
+The local server reads your `.env.local` for database credentials.
+
+### Option B: Remote (Streamable HTTP) — Claude.ai and Claude mobile
+
+The remote endpoint is deployed on Vercel at `/api/mcp`. Use this to access your bar tools from Claude.ai on desktop or the Claude mobile app on your phone.
+
+#### Required Vercel env vars
+
+In addition to the standard app env vars, make sure these are set:
+
+| Variable | Purpose |
+|----------|---------|
+| `MCP_BEARER_TOKEN` | Static bearer token for direct API access (curl, Claude Code URL transport) |
+| `CRON_SECRET` | Signs OAuth tokens (already required for session cookies) |
+| `DASHBOARD_PASSWORD` | Your login password (already required for the web UI) |
+
+#### Connecting from Claude.ai or the Claude mobile app
+
+1. Go to **Claude.ai → Settings → Integrations** (or MCP settings in the Claude mobile app)
+2. Add a new integration / MCP server
+3. Enter the server URL: `https://your-app.vercel.app/api/mcp`
+4. Claude redirects you to your bar-manager login page — **enter your dashboard password**
+5. After login, the connection is auto-approved and you're ready to go
+6. The session lasts **30 days** before you need to log in again
+
+That's it. No OAuth client ID or secret to configure — the OAuth flow is fully self-contained. Claude handles discovery and registration automatically.
+
+<details>
+<summary>How the OAuth flow works under the hood</summary>
+
+The remote MCP endpoint implements OAuth 2.0 with PKCE so Claude.ai can authenticate without a pre-shared secret:
+
+1. Claude discovers auth endpoints via `/.well-known/oauth-protected-resource` (RFC 9728) and `/.well-known/oauth-authorization-server` (RFC 8414)
+2. Claude registers itself via Dynamic Client Registration at `/api/mcp/register` (RFC 7591)
+3. Claude redirects you to `/api/mcp/authorize` with a PKCE challenge
+4. If you're logged into the dashboard, it auto-approves. If not, you log in first at `/login`
+5. Claude exchanges the authorization code for access + refresh tokens at `/api/mcp/token`
+6. All tokens are **stateless signed JWTs** using `CRON_SECRET` — no database table needed
+7. Access tokens expire after 1 hour (auto-refreshed). Refresh tokens last 30 days.
+
+OAuth is just a protocol (an open standard, not a company or paid service). It defines how apps like Claude can get permission to access your data without you sharing your password with them. This implementation is entirely self-hosted — no third-party auth provider required.
+</details>
+
+#### Direct API access (curl)
+
+```bash
+curl -X POST https://your-app.vercel.app/api/mcp \
+  -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+#### Claude Code URL transport (remote, no local server needed)
+
+Add to your Claude Code config (`~/.claude.json` or project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "bar-manager-remote": {
+      "type": "url",
+      "url": "https://your-app.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-MCP_BEARER_TOKEN>"
+      }
+    }
+  }
+}
 ```
 
 ---
@@ -531,12 +642,18 @@ app/
     menu-sales/           Menu sales aggregation with date filtering + item normalization
     recipes/[id]/         Recipe detail editing (on_menu, creator, created_at_label, refrigerate)
     gift-cards/           Gift card CRUD
+    mcp/                  Remote MCP endpoint (Streamable HTTP)
+    mcp/authorize/        OAuth 2.0 authorization endpoint
+    mcp/token/            OAuth 2.0 token endpoint
+    mcp/register/         OAuth 2.0 Dynamic Client Registration
     webhooks/toast/       Real-time Toast stock webhook
     ai/chat/              Gemini chat endpoint
     ai/reorder/           AI reorder suggestions endpoint
 
 lib/
   auth/                   Session token (HMAC-SHA256) + request verification
+  mcp-oauth.ts            OAuth 2.0 JWT signing/verification for remote MCP
+  mcp-tools.ts            MCP tool definitions (shared between local + remote)
   integrations/           Toast, Google, xtraCHEF, QBO, Sling API clients
   inventory/              Expected inventory calculation engine
   notifications/          Push notification sending (web-push) + client-side SW registration

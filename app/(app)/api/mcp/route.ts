@@ -15,34 +15,44 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createServerClient } from "@/lib/supabase/server";
 import { registerTools } from "@/lib/mcp-tools";
+import { verifyJwt, baseUrl } from "@/lib/mcp-oauth";
 
-function authenticate(req: Request): Response | null {
-  const token = process.env.MCP_BEARER_TOKEN;
-  if (!token) {
-    return new Response(JSON.stringify({ error: "Server misconfigured: MCP_BEARER_TOKEN not set" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
+async function authenticate(req: Request): Promise<Response | null> {
   const authHeader = req.headers.get("authorization") ?? "";
-  const expected = `Bearer ${token}`;
 
-  // Constant-time comparison to prevent timing attacks
-  const a = Buffer.from(authHeader);
-  const b = Buffer.from(expected);
-
-  if (a.byteLength !== b.byteLength || !timingSafeEqual(a, b)) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+  // 1. Try static MCP_BEARER_TOKEN (CLI / curl usage)
+  const staticToken = process.env.MCP_BEARER_TOKEN;
+  if (staticToken) {
+    const expected = `Bearer ${staticToken}`;
+    const a = Buffer.from(authHeader);
+    const b = Buffer.from(expected);
+    if (a.byteLength === b.byteLength && timingSafeEqual(a, b)) {
+      return null; // authenticated
+    }
   }
-  return null;
+
+  // 2. Try OAuth JWT access token (Claude.ai)
+  if (authHeader.startsWith("Bearer ")) {
+    const jwt = authHeader.slice(7);
+    const claims = await verifyJwt(jwt);
+    if (claims && claims.type === "access_token") {
+      return null; // authenticated
+    }
+  }
+
+  // No valid auth — return 401 with resource metadata hint per RFC 9728
+  const origin = baseUrl();
+  return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    status: 401,
+    headers: {
+      "Content-Type": "application/json",
+      "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
+    },
+  });
 }
 
 async function handleRequest(req: Request): Promise<Response> {
-  const authError = authenticate(req);
+  const authError = await authenticate(req);
   if (authError) return authError;
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
