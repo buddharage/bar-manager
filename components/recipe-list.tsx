@@ -833,7 +833,8 @@ function MobileRecipeCard({
             )}
             {recipe.instructions && (
               <div className="text-xs">
-                <span className="font-medium text-muted-foreground">Instructions:</span>{" "}
+                <span className="font-medium text-muted-foreground">Instructions:</span>
+                <br />
                 <span className="whitespace-pre-line">{stripHtml(recipe.instructions)}</span>
               </div>
             )}
@@ -1048,7 +1049,8 @@ function ExpandableRecipeRow({
                 )}
                 {recipe.instructions && (
                   <div>
-                    <span className="font-medium text-muted-foreground">Instructions:</span>{" "}
+                    <span className="font-medium text-muted-foreground">Instructions:</span>
+                    <br />
                     <span className="whitespace-pre-line">{stripHtml(recipe.instructions)}</span>
                   </div>
                 )}
