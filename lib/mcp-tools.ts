@@ -317,6 +317,84 @@ export function registerTools(server: McpServer, supabase: SupabaseClient) {
     }
   );
 
+  // ── Tool: format_recipes_for_xtrachef ──
+
+  server.tool(
+    "format_recipes_for_xtrachef",
+    "Format recipes from the database into structured output ready for xtraCHEF entry. Separates ingredients from instructions and applies house brand preferences (Gary's Good gin/vodka, Old Crow bourbon, Plantation rum, Anza tequila).",
+    {
+      recipe_group: z.string().optional().describe("Filter by recipe group (e.g., 'House Cocktails', 'Cocktail Batch', 'Syrups')"),
+      name: z.string().optional().describe("Search by recipe name"),
+    },
+    async ({ recipe_group, name }) => {
+      let query = supabase
+        .from("recipes")
+        .select("name, type, recipe_group, serving_size, batch_size, batch_uom, recipe_ingredients(name, type, quantity, uom)")
+        .order("name");
+
+      if (recipe_group) {
+        query = query.ilike("recipe_group", `%${recipe_group}%`);
+      }
+      if (name) {
+        query = query.ilike("name", `%${name}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return { content: [{ type: "text" as const, text: "No recipes found matching the criteria." }] };
+      }
+
+      const brandMap: Record<string, string> = {
+        gin: "Gary's Good",
+        vodka: "Gary's Good",
+        bourbon: "Old Crow",
+        rum: "Plantation Dark",
+        tequila: "Anza",
+      };
+
+      const formatted = data.map((recipe) => {
+        const ingredients = (recipe.recipe_ingredients || []).map(
+          (ing: { name: string; type: string; quantity: number | null; uom: string | null }) => {
+            let ingredientName = ing.name;
+            // Apply brand preferences for generic spirit names
+            for (const [spirit, brand] of Object.entries(brandMap)) {
+              if (ingredientName.toLowerCase().includes(spirit) && !ingredientName.toLowerCase().includes(brand.toLowerCase())) {
+                ingredientName += ` (prefer ${brand})`;
+              }
+            }
+            return {
+              name: ingredientName,
+              type: ing.type,
+              quantity: ing.quantity,
+              uom: ing.uom,
+            };
+          }
+        );
+
+        return {
+          name: recipe.name,
+          recipe_group: recipe.recipe_group,
+          type: recipe.type,
+          serving_size: recipe.serving_size,
+          batch_size: recipe.batch_size,
+          batch_uom: recipe.batch_uom,
+          ingredients,
+          ingredient_count: ingredients.length,
+          has_ingredients: ingredients.length > 0,
+        };
+      });
+
+      const summary = {
+        total_recipes: formatted.length,
+        missing_ingredients: formatted.filter((r) => !r.has_ingredients).map((r) => r.name),
+        recipes: formatted,
+      };
+
+      return { content: [{ type: "text" as const, text: JSON.stringify(summary, null, 2) }] };
+    }
+  );
+
   // ── Tool: query_gift_cards ──
 
   server.tool(
