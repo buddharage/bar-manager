@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { Snowflake } from "lucide-react";
 import { NO_FULL_SPECS_GROUPS } from "@/lib/constants/recipe-groups";
+import { stripHtml } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ function formatQty(n: number): string {
 }
 
 function formatInstructions(text: string): string[] {
-  return text
+  return stripHtml(text)
     .split(/\n/)
     .map((s) => s.trim())
     .filter(Boolean);
