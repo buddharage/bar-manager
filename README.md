@@ -257,7 +257,7 @@ Connects Google Drive and Gmail so the AI assistant can search bar documents, re
    GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
    ```
 6. Start the app, go to **Settings**, and click **Connect Google** to complete the OAuth flow
-7. Create two folders in your Google Drive named exactly **Finances** and **Operations** — the sync pulls documents from these folders
+7. Create folders in your Google Drive named exactly **Design**, **Finances**, **HR**, **Operations**, and **Legal** — the sync pulls documents from these folders
 
 > **Production:** Update `GOOGLE_REDIRECT_URI` in Vercel env vars to your production callback URL.
 

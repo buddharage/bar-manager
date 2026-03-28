@@ -270,7 +270,7 @@ function SettingsContent() {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Connect your Google account to give the AI assistant context from your Drive
-            (Finances &amp; Operations folders) and Gmail (searched live for receipts &amp; invoices).
+            (Design, Finances, HR, Operations &amp; Legal folders) and Gmail (searched live for receipts &amp; invoices).
             Drive documents are synced and embedded for semantic search. Gmail is queried on demand.
           </p>
           {googleError && (
