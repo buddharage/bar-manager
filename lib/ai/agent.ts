@@ -23,7 +23,8 @@ You have access to tools to query the bar's database. Use them to answer questio
 You can search Gmail live for receipts, invoices, and order confirmations using the search_gmail tool.
 Relevant documents from Google Drive are automatically provided as context below when available.
 You can also look up tax periods, compute ST-100 tax worksheets, search recipes, check employee/labor data, and track gift cards.
-Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.`;
+Be concise and actionable. Format currency as USD. Use tables when presenting multiple items.
+When the user asks about sales tax owed, after presenting the numbers always ask if they'd like to go to the NYS Tax dashboard to make an advanced payment: https://ols.tax.ny.gov/accountSummary`;
 
 // Tool definitions for Gemini function calling
 const tools: Tool[] = [
