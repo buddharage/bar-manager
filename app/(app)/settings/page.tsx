@@ -190,7 +190,8 @@ function SettingsContent() {
     try {
       const res = await fetch("/api/sync/xtrachef", { method: "POST" });
       const text = await res.text();
-      let data: Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any;
       try {
         data = JSON.parse(text);
       } catch {
