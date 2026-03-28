@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   "/api/sync/",
   "/api/webhooks/",
   "/api/ai/",
+  "/api/mcp",
 ];
 
 export async function middleware(request: NextRequest) {
