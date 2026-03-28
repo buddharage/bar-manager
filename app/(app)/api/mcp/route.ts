@@ -6,13 +6,33 @@
  * Claude CLI via the `url` transport type.
  *
  * Uses stateless mode with JSON responses for Vercel serverless compatibility.
+ *
+ * Set MCP_BEARER_TOKEN in your environment to require authentication.
+ * When set, clients must send an `Authorization: Bearer <token>` header.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createServerClient } from "@/lib/supabase/server";
 import { registerTools } from "@/lib/mcp-tools";
 
+function authenticate(req: Request): Response | null {
+  const token = process.env.MCP_BEARER_TOKEN;
+  if (!token) return null; // no token configured, skip auth
+
+  const authHeader = req.headers.get("authorization");
+  if (authHeader !== `Bearer ${token}`) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  return null;
+}
+
 async function handleRequest(req: Request): Promise<Response> {
+  const authError = authenticate(req);
+  if (authError) return authError;
+
   const server = new McpServer({
     name: "bar-manager",
     version: "1.0.0",
@@ -28,7 +48,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
   await server.connect(transport);
 
-  return transport.handleRequest(req);
+  try {
+    return await transport.handleRequest(req);
+  } finally {
+    await transport.close();
+  }
 }
 
 export async function GET(req: Request) {

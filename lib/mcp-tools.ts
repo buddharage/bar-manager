@@ -1,8 +1,9 @@
 /**
  * Shared MCP tool definitions for the bar-manager server.
  *
- * Used by both the local stdio MCP server (mcp-server/src/index.ts) and the
- * Vercel-hosted remote MCP endpoint (app/(app)/api/mcp/route.ts).
+ * Used by the Vercel-hosted remote MCP endpoint (app/(app)/api/mcp/route.ts).
+ * The local stdio server (mcp-server/src/index.ts) has its own copy of these
+ * definitions since it runs in a separate TypeScript project.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
