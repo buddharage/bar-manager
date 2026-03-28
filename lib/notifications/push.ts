@@ -2,7 +2,7 @@ import webpush from "web-push";
 import { createServerClient } from "@/lib/supabase/server";
 
 export interface PushPayload {
-  type: "inventory_alert" | "chat_response";
+  type: "inventory_alert" | "chat_response" | "whiteboard_update";
   title: string;
   body: string;
   url: string;
@@ -45,7 +45,7 @@ export async function sendPushNotification(
   // Check user preferences
   const { data: prefs } = await supabase
     .from("notification_preferences")
-    .select("inventory_alerts, chat_responses")
+    .select("inventory_alerts, chat_responses, whiteboard_updates")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -55,6 +55,9 @@ export async function sendPushNotification(
       return { sent: 0, failed: 0 };
     }
     if (payload.type === "chat_response" && !prefs.chat_responses) {
+      return { sent: 0, failed: 0 };
+    }
+    if (payload.type === "whiteboard_update" && !prefs.whiteboard_updates) {
       return { sent: 0, failed: 0 };
     }
   }
@@ -134,5 +137,27 @@ export async function broadcastInventoryAlert(
 
   for (const userId of userIds) {
     await sendPushNotification(userId, { ...payload, type: "inventory_alert" });
+  }
+}
+
+/**
+ * Send whiteboard update push to all users with subscriptions.
+ * Used by the whiteboard sync cron job.
+ */
+export async function broadcastWhiteboardUpdate(
+  payload: Omit<PushPayload, "type">,
+): Promise<void> {
+  const supabase = createServerClient();
+
+  const { data: subs } = await supabase
+    .from("push_subscriptions")
+    .select("user_id");
+
+  if (!subs || subs.length === 0) return;
+
+  const userIds = [...new Set(subs.map((s) => s.user_id))];
+
+  for (const userId of userIds) {
+    await sendPushNotification(userId, { ...payload, type: "whiteboard_update" });
   }
 }

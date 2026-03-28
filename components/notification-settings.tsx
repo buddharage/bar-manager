@@ -16,13 +16,14 @@ import {
 interface Preferences {
   inventory_alerts: boolean;
   chat_responses: boolean;
+  whiteboard_updates: boolean;
 }
 
 export function NotificationSettings() {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [subscribed, setSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [prefs, setPrefs] = useState<Preferences>({ inventory_alerts: true, chat_responses: true });
+  const [prefs, setPrefs] = useState<Preferences>({ inventory_alerts: true, chat_responses: true, whiteboard_updates: true });
   const [supported, setSupported] = useState(true);
 
   const checkSubscription = useCallback(async () => {
@@ -120,8 +121,8 @@ export function NotificationSettings() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Get notified when inventory drops below par level or when the AI chatbot
-          responds to your queries.
+          Get notified about inventory alerts, AI chat responses, and whiteboard
+          updates.
         </p>
 
         {permission === "denied" ? (
@@ -178,6 +179,26 @@ export function NotificationSettings() {
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                       prefs.chat_responses ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Whiteboard Updates</div>
+                  <div className="text-xs text-muted-foreground">
+                    Notify when whiteboard content changes
+                  </div>
+                </div>
+                <button
+                  onClick={() => togglePref("whiteboard_updates")}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    prefs.whiteboard_updates ? "bg-primary" : "bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      prefs.whiteboard_updates ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
                 </button>

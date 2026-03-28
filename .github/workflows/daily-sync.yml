@@ -5,8 +5,13 @@ on:
     # Google Drive: daily at 3 AM ET (8:00 UTC) — syncs files + generates embeddings
     # Toast: daily at 6 AM ET (11:00 UTC)
     # Gmail is searched live by the AI agent — no sync needed
+    # Whiteboard camera: 11 AM, 6 PM, 10 PM EDT (15:00, 22:00, 02:00 UTC)
+    #   During EST (Nov–Mar) these fire 1 hour early; the API deduplicates.
     - cron: "0 8 * * *"
     - cron: "0 11 * * *"
+    - cron: "0 15 * * *"
+    - cron: "0 22 * * *"
+    - cron: "0 2 * * *"
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -32,6 +37,25 @@ jobs:
       - name: Trigger Toast sync
         run: |
           curl -X POST "${{ secrets.APP_URL }}/api/sync/toast" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body \
+            --max-time 120
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+  whiteboard-capture:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.schedule == '0 15 * * *' ||
+      github.event.schedule == '0 22 * * *' ||
+      github.event.schedule == '0 2 * * *' ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Capture whiteboard
+        run: |
+          curl -X POST "${{ secrets.APP_URL }}/api/sync/whiteboard" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
             --fail-with-body \

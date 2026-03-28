@@ -74,6 +74,7 @@ Open `.env.local` in your editor — you'll see sections for each integration. H
 | `XTRACHEF_TENANT_ID` | No | Step 9 |
 | `XTRACHEF_LOCATION_ID` | No | Step 9 |
 | `XTRACHEF_TOKEN` | No | Step 9 |
+| `CAMERA_SNAPSHOT_URL` | No | Step 10 |
 | `QBO_CLIENT_ID` | No | Phase 2 (not yet implemented) |
 | `QBO_CLIENT_SECRET` | No | Phase 2 |
 | `QBO_REALM_ID` | No | Phase 2 |
@@ -139,6 +140,7 @@ The app will not start until the database schema is created. There are 14 migrat
 | 12 | `011_syrup_metadata_backfill.sql` | Backfills syrup recipe metadata |
 | 13 | `012_gift_cards.sql` | `gift_cards` table for gift card tracking |
 | 14 | `013_push_subscriptions.sql` | `push_subscriptions` and `notification_preferences` tables for push notifications |
+| 15 | `014_whiteboard_snapshots.sql` | `whiteboard_snapshots` table and `whiteboard_updates` preference column |
 
 > **Troubleshooting:** If you see errors like `Could not find the table 'public.sync_logs' in the schema cache`, the migrations haven't been applied or were run out of order. Go back and run them sequentially from the beginning.
 
@@ -367,7 +369,62 @@ npm run sync:xtrachef
 
 ---
 
-### Step 10. Deploy to Vercel
+### Step 10. Set up whiteboard camera (optional)
+
+The whiteboard camera feature automatically photographs a physical whiteboard, extracts text using Gemini AI vision, and sends push notifications when content changes. Captures run 3x daily (11 AM, 6 PM, 10 PM EST).
+
+#### 10a. Required hardware
+
+**Camera: [Reolink RLC-810A](https://www.amazon.com/dp/B07K74GWX5) (~$55)**
+
+- 4K (8MP) resolution — reads whiteboard text clearly across a room
+- Infrared night vision up to 100ft — works in a dimly-lit bar
+- HTTP snapshot API — returns a JPEG via a single HTTP GET request
+- Power over Ethernet (PoE) — single cable for power and network
+- No cloud subscription required
+
+**PoE injector or PoE switch (~$15–20)** — Powers the camera over Ethernet:
+- TP-Link TL-PoE150S (single port injector), or any 802.3af PoE switch
+
+**Ethernet cable** — Cat5e or Cat6, length depends on camera placement
+
+#### 10b. Network access
+
+The camera sits on the bar's local network. Vercel serverless functions need to reach it over the internet:
+
+1. **Cloudflare Tunnel (recommended, free)** — Install `cloudflared` on any always-on device at the bar (Raspberry Pi, old laptop, or the router itself). Creates a secure tunnel with no inbound ports opened. The camera becomes accessible at a subdomain like `camera.yourbar.example.com`.
+
+2. **Router port forwarding + DDNS** — Forward the camera's HTTP port on your router, use a free Dynamic DNS service (No-IP, DuckDNS). Note: Optimum/ISP routers may use CGNAT — call them to request a public IP if port forwarding doesn't work.
+
+3. **Cloud camera alternative** — If using a Wyze, Arlo, or similar cloud camera, no tunnel needed — Vercel calls the vendor's cloud API directly.
+
+#### 10c. Configure the environment variable
+
+Once the camera snapshot URL is reachable from the internet, add to `.env.local` and Vercel:
+
+```
+CAMERA_SNAPSHOT_URL=https://camera.yourbar.example.com/cgi-bin/api.cgi?cmd=Snap&channel=0&rs=abc&user=admin&password=xxx
+```
+
+#### 10d. Run migration 014
+
+Apply `supabase/migrations/014_whiteboard_snapshots.sql` via the Supabase SQL Editor (or `supabase db push`).
+
+#### 10e. Verify
+
+Test manually:
+```bash
+curl -X POST http://localhost:3000/api/sync/whiteboard \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Then check the **Whiteboard** page in the app to see the captured snapshot and extracted text.
+
+The GitHub Actions cron (Step 12) handles the 3x daily automated captures.
+
+---
+
+### Step 11. Deploy to Vercel
 
 1. Push your code to GitHub
 2. Go to [vercel.com](https://vercel.com), click **Add New Project**, and import the repo
@@ -380,11 +437,11 @@ npm run sync:xtrachef
 
 ---
 
-### Step 11. Enable GitHub Actions cron (optional)
+### Step 12. Enable GitHub Actions cron (optional)
 
 Automated daily syncs run via GitHub Actions, which call your Vercel API routes on a schedule.
 
-#### 11a. Add GitHub repo secrets
+#### 12a. Add GitHub repo secrets
 
 Go to your GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**:
 
@@ -393,7 +450,7 @@ Go to your GitHub repo → **Settings → Secrets and variables → Actions → 
 | `APP_URL` | `https://your-app.vercel.app` (no trailing slash) |
 | `CRON_SECRET` | Same value you set in Step 4 and Vercel env vars |
 
-#### 11b. Cron schedule
+#### 12b. Cron schedule
 
 The schedule is defined in `.github/workflows/daily-sync.yml`:
 
@@ -401,6 +458,7 @@ The schedule is defined in `.github/workflows/daily-sync.yml`:
 |-----|----------|-----------|
 | Google Drive sync | Daily at 3:00 AM ET | `POST /api/sync/google` |
 | Toast sync | Daily at 6:00 AM ET | `POST /api/sync/toast` |
+| Whiteboard capture | Daily at 11 AM, 6 PM, 10 PM ET | `POST /api/sync/whiteboard` |
 
 Gmail is searched live by the AI chat agent — there is no scheduled Gmail sync.
 
@@ -478,6 +536,7 @@ VAPID_SUBJECT=                    # Web Push contact email (mailto:...)
 XTRACHEF_TENANT_ID=               # xtraCHEF tenant ID
 XTRACHEF_LOCATION_ID=             # xtraCHEF location ID
 XTRACHEF_TOKEN=                   # xtraCHEF Bearer token (expires)
+CAMERA_SNAPSHOT_URL=              # Whiteboard camera HTTP snapshot URL
 
 # ── Future (not yet implemented) ──────────────────────────────
 QBO_CLIENT_ID=                    # QuickBooks Online OAuth client ID
@@ -498,7 +557,8 @@ SLING_ORG_ID=                     # Sling organization ID
 | **2 — QBO + Sales Tax** | Stubbed | QuickBooks journal entries, NYC ST-100 tax worksheet, monthly filing reminders |
 | **3 — Sling + Payroll** | Stubbed | AI scheduling, time entry tracking, payroll pre-fill |
 | **4 — AI Chat** | Done | Natural language queries against bar data via Gemini function calling, vector-based document search with embedding cache |
-| **PWA + Push Notifications** | Done | Installable PWA, push notifications for inventory alerts and AI chat responses, per-user notification preferences, nav alert badge |
+| **Whiteboard Camera** | Done | Automated whiteboard OCR via IP camera + Gemini vision, 3x daily captures, push notifications on content changes, snapshot history page |
+| **PWA + Push Notifications** | Done | Installable PWA, push notifications for inventory alerts, AI chat responses, and whiteboard updates, per-user notification preferences, nav alert badge |
 | **Google Workspace** | Done | Drive + Gmail sync, document chunking + vector embeddings, semantic document search, AI-powered PDF extraction |
 
 ## Project Structure
@@ -512,6 +572,7 @@ app/
   recipes/                Recipes + prep recipes from xtraCHEF
   menu/sales/             Menu item sales analytics with date filtering, sorting, and category grouping
   gift-cards/             Gift card balance and liability tracking
+  whiteboard/             Whiteboard capture history + manual capture trigger
   chat/                   Conversational AI interface
   settings/               Integration status, push notifications, Google connect, xtraCHEF token, sync history
   tax/                    Sales tax worksheet (Phase 2)
@@ -526,6 +587,7 @@ app/
     sync/google/          Google Drive sync endpoint
     sync/gmail/           Gmail sync endpoint
     sync/xtrachef/        xtraCHEF recipe sync endpoint
+    sync/whiteboard/      Whiteboard camera capture + Gemini OCR endpoint
     notifications/        Push subscription management + notification preferences
     inventory/            Inventory CRUD, manual counts, expected recalculation
     menu-sales/           Menu sales aggregation with date filtering + item normalization
@@ -542,6 +604,7 @@ lib/
   notifications/          Push notification sending (web-push) + client-side SW registration
   sync/                   Toast order sync + xtraCHEF recipe sync logic
   menu-sales/             Date range presets, filtering, item normalization, and case computation
+  whiteboard/             Whiteboard camera snapshot + Gemini vision OCR pipeline
   units.ts                Unit conversion (ml/oz/volume/weight + purchase units)
   ai/
     agent.ts              Gemini Flash agent with function-calling tools

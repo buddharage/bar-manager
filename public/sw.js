@@ -48,6 +48,15 @@ self.addEventListener("push", (event) => {
         if (chatFocused) return;
       }
 
+      // Suppress whiteboard notifications if user is viewing the whiteboard page.
+      if (payload.type === "whiteboard_update") {
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        const wbFocused = clients.some(
+          (c) => c.focused && c.url.includes("/whiteboard")
+        );
+        if (wbFocused) return;
+      }
+
       // Inventory alerts always show — no suppression.
 
       await self.registration.showNotification(payload.title, options);
