@@ -241,7 +241,8 @@ function sortGroups(groups: string[]): string[] {
 // Main RecipeList component
 // ---------------------------------------------------------------------------
 
-const COL_COUNT = 8; // total visible columns
+const BASE_COL_COUNT = 8; // total visible columns
+const COST_COL_COUNT = 3; // Price, Cost, Cost % columns
 
 export function RecipeList({
   recipes: initialRecipes,
@@ -555,6 +556,9 @@ export function RecipeList({
   );
   const allExpanded = expandableGroupIds.length > 0 && expandableGroupIds.every((id) => expandedIds.has(id));
 
+  const activeGroupName = groups.find((g) => groupSlug(g) === activeTab) || "";
+  const hideCosts = activeGroupName === RECIPE_GROUPS.COCKTAIL_BATCH || activeGroupName === RECIPE_GROUPS.SYRUPS;
+
   function toggleExpandAll() {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -787,9 +791,9 @@ export function RecipeList({
                 <TableHeader>
                   <TableRow>
                     <SortableHead label="Name" sortKey="name" currentSort={sort} onSort={handleSort} />
-                    <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />
-                    <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />
+                    {!hideCosts && <SortableHead label="Price" sortKey="menu_price" currentSort={sort} onSort={handleSort} className="text-right" />}
+                    {!hideCosts && <SortableHead label="Cost" sortKey="prime_cost" currentSort={sort} onSort={handleSort} className="text-right" />}
+                    {!hideCosts && <SortableHead label="Cost %" sortKey="food_cost_pct" currentSort={sort} onSort={handleSort} className="text-right" />}
                     <SortableHead label="On Menu" sortKey="on_menu" currentSort={sort} onSort={handleSort} />
                     <SortableHead label="Refrigerate" sortKey="refrigerate" currentSort={sort} onSort={handleSort} />
                     <SortableHead label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
@@ -816,6 +820,7 @@ export function RecipeList({
                         creatorOptions={creatorOptions}
                         createdAtOptions={createdAtOptions}
                         onUpdate={updateRecipe}
+                        hideCosts={hideCosts}
                       />
                     );
                   })}
@@ -1086,6 +1091,7 @@ function ExpandableRecipeRow({
   creatorOptions,
   createdAtOptions,
   onUpdate,
+  hideCosts,
 }: {
   recipe: Recipe;
   hasIngredients: boolean;
@@ -1099,6 +1105,7 @@ function ExpandableRecipeRow({
   creatorOptions: string[];
   createdAtOptions: string[];
   onUpdate: (id: number, field: string, value: unknown) => void;
+  hideCosts?: boolean;
 }) {
   const cascadedBy = cascade && cascade.onMenuBy.length > 0 ? cascade.onMenuBy : undefined;
   const creatorIsCascaded = !!cascade?.creator;
@@ -1125,19 +1132,25 @@ function ExpandableRecipeRow({
             {recipe.name}
           </span>
         </TableCell>
-        <TableCell className="text-right">
-          {recipe.menu_price != null
-            ? `$${Number(recipe.menu_price).toFixed(2)}`
-            : "—"}
-        </TableCell>
-        <TableCell className="text-right">
-          {recipe.prime_cost != null
-            ? `$${Number(recipe.prime_cost).toFixed(2)}`
-            : "—"}
-        </TableCell>
-        <TableCell className="text-right">
-          {costBadge(recipe.food_cost_pct)}
-        </TableCell>
+        {!hideCosts && (
+          <TableCell className="text-right">
+            {recipe.menu_price != null
+              ? `$${Number(recipe.menu_price).toFixed(2)}`
+              : "—"}
+          </TableCell>
+        )}
+        {!hideCosts && (
+          <TableCell className="text-right">
+            {recipe.prime_cost != null
+              ? `$${Number(recipe.prime_cost).toFixed(2)}`
+              : "—"}
+          </TableCell>
+        )}
+        {!hideCosts && (
+          <TableCell className="text-right">
+            {costBadge(recipe.food_cost_pct)}
+          </TableCell>
+        )}
 
         {/* On Menu — click to toggle (disabled if cascaded from parent) */}
         <TableCell>
@@ -1203,7 +1216,7 @@ function ExpandableRecipeRow({
 
       {isExpanded && (recipe.notes || recipe.serving_size != null || recipe.instructions || recipe.image_url || (usedIn && usedIn.length > 0)) && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={COL_COUNT} className="py-3 px-10">
+          <TableCell colSpan={hideCosts ? BASE_COL_COUNT - COST_COL_COUNT : BASE_COL_COUNT} className="py-3 px-10">
             <div className="flex gap-6">
               {recipe.image_url && (
                 <img
@@ -1298,7 +1311,7 @@ function ExpandableRecipeRow({
             <TableCell className="text-sm text-right">
               {ing.cost != null ? `$${Number(ing.cost).toFixed(4)}` : "—"}
             </TableCell>
-            <TableCell colSpan={3} />
+            <TableCell colSpan={hideCosts ? 0 : 3} />
           </TableRow>
         );
       })}
