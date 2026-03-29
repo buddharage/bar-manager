@@ -13,7 +13,7 @@ interface Message {
 const EXAMPLE_QUESTIONS = [
   { icon: "🧾", text: "How much sales tax do we owe in the last 7 days?" },
   { icon: "🍸", text: "What are the top 10 House Cocktails this month?" },
-  { icon: "🍺", text: "How many cases of tecate, miller high life, and corona did we sell in the past week? Use the aggregate counts from Happy Hour, beer combos, and single orders." },
+  { icon: "👥", text: "What were our labor costs and tip totals last week?" },
   { icon: "📊", text: "How have sales trended in the past month?" },
   { icon: "📦", text: "Show me items below par level. What should I order now?" },
   { icon: "🔮", text: "What are your sales estimates for the coming week?" },
@@ -195,8 +195,18 @@ export default function ChatPage() {
               </svg>
             </Button>
           </div>
-          <p className="mt-1.5 text-center text-[11px] text-muted-foreground/60">
-            Powered by Gemini. Responses may contain errors.
+          <p className="mt-1.5 text-center text-[11px] text-muted-foreground/60 inline-flex items-center gap-1 w-full justify-center">
+            Powered by Gemini 2.5 Flash. Responses may contain errors.
+            <span
+              title="Chat is powered by Google's Gemini 2.5 Flash model with function-calling tools that query your Toast sales data, xtraCHEF recipes, inventory alerts, employee/labor records, Google Drive documents, and Gmail. All data stays within your Supabase database and Google account."
+              className="cursor-help"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <circle cx="12" cy="17" r="0.5" fill="currentColor" />
+              </svg>
+            </span>
           </p>
         </div>
       </div>
