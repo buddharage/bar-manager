@@ -888,8 +888,8 @@ function MobileRecipeCard({
           </span>
         )}
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm">{recipe.name}</div>
-          <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground flex-wrap">
+          <div className="font-medium text-base">{recipe.name}</div>
+          <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground flex-wrap">
             {recipe.menu_price != null && (
               <span>${Number(recipe.menu_price).toFixed(2)}</span>
             )}
@@ -907,32 +907,6 @@ function MobileRecipeCard({
             )}
           </div>
         </div>
-        <div className="flex gap-1 shrink-0">
-          <Badge
-            variant={recipe.on_menu || cascadedBy ? "default" : "outline"}
-            className={cn(
-              "text-[10px] px-1.5",
-              cascadedBy ? "cursor-not-allowed opacity-80" : "cursor-pointer",
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!cascadedBy) onUpdate(recipe.id, "on_menu", !recipe.on_menu);
-            }}
-            title={cascadedBy ? `On menu via: ${cascadedBy.join(", ")}` : undefined}
-          >
-            {cascadedBy ? "Via" : recipe.on_menu ? "Menu" : "Off"}
-          </Badge>
-          <Badge
-            variant={recipe.refrigerate ? "default" : "outline"}
-            className="text-[10px] px-1.5 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUpdate(recipe.id, "refrigerate", !recipe.refrigerate);
-            }}
-          >
-            {recipe.refrigerate ? "Fridge" : "No"}
-          </Badge>
-        </div>
       </div>
 
       {/* Expanded details */}
@@ -947,9 +921,33 @@ function MobileRecipeCard({
             />
           )}
 
+          {/* On Menu / Refrigerate toggles */}
+          <div className="flex gap-2">
+            <Badge
+              variant={recipe.on_menu || cascadedBy ? "default" : "outline"}
+              className={cn(
+                "text-xs px-2 py-0.5",
+                cascadedBy ? "cursor-not-allowed opacity-80" : "cursor-pointer",
+              )}
+              onClick={() => {
+                if (!cascadedBy) onUpdate(recipe.id, "on_menu", !recipe.on_menu);
+              }}
+              title={cascadedBy ? `On menu via: ${cascadedBy.join(", ")}` : undefined}
+            >
+              {cascadedBy ? `Via ${cascadedBy.length > 1 ? `${cascadedBy.length} recipes` : cascadedBy[0]}` : recipe.on_menu ? "On Menu" : "Off Menu"}
+            </Badge>
+            <Badge
+              variant={recipe.refrigerate ? "default" : "outline"}
+              className="text-xs px-2 py-0.5 cursor-pointer"
+              onClick={() => onUpdate(recipe.id, "refrigerate", !recipe.refrigerate)}
+            >
+              {recipe.refrigerate ? "Refrigerate" : "No Fridge"}
+            </Badge>
+          </div>
+
           {/* Meta fields */}
-          <div className="space-y-2 text-sm">
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          <div className="space-y-2 text-base">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
               {recipe.serving_size != null && (
                 <span className="text-muted-foreground">
                   Serving: {Number(recipe.serving_size)}
@@ -988,13 +986,13 @@ function MobileRecipeCard({
             </div>
 
             {recipe.notes && (
-              <p className="text-xs">
+              <p className="text-sm">
                 <span className="font-medium text-muted-foreground">Notes:</span>{" "}
                 {recipe.notes}
               </p>
             )}
             {recipe.instructions && (
-              <div className="text-xs">
+              <div className="text-sm">
                 <span className="font-medium text-muted-foreground">Instructions:</span>
                 <br />
                 <span className="whitespace-pre-line">{stripHtml(recipe.instructions)}</span>
@@ -1003,7 +1001,7 @@ function MobileRecipeCard({
 
             {/* Used in links */}
             {usedIn && usedIn.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap text-sm">
                 <span className="font-medium text-muted-foreground">Used in:</span>
                 {usedIn.map((ref, i) => (
                   <span key={ref.id}>
@@ -1024,7 +1022,7 @@ function MobileRecipeCard({
           {/* Ingredients list */}
           {recipe.recipe_ingredients.length > 0 && (
             <div className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                 Ingredients
               </div>
               {recipe.recipe_ingredients.map((ing) => {
@@ -1036,7 +1034,7 @@ function MobileRecipeCard({
                 return (
                   <div
                     key={ing.id}
-                    className="flex items-center justify-between text-xs py-1 border-b border-border/50 last:border-0"
+                    className="flex items-center justify-between text-sm py-1 border-b border-border/50 last:border-0"
                   >
                     <span className="flex items-center gap-1.5 min-w-0">
                       {linkedRecipe ? (
@@ -1225,7 +1223,7 @@ function ExpandableRecipeRow({
                   className="w-24 h-24 object-cover rounded"
                 />
               )}
-              <div className="space-y-1.5 text-sm">
+              <div className="space-y-1.5 text-base">
                 {recipe.serving_size != null && (
                   <p>
                     <span className="font-medium text-muted-foreground">Serving Size:</span>{" "}
@@ -1279,7 +1277,7 @@ function ExpandableRecipeRow({
 
         return (
           <TableRow key={ing.id} className="bg-muted/30">
-            <TableCell className="pl-10 text-sm">
+            <TableCell className="pl-10 text-base">
               <span className="flex items-center gap-1.5">
                 {linkedRecipe ? (
                   <button
@@ -1302,13 +1300,13 @@ function ExpandableRecipeRow({
                 )}
               </span>
             </TableCell>
-            <TableCell className="text-sm text-right">
+            <TableCell className="text-base text-right">
               {ing.quantity ?? "—"}
             </TableCell>
-            <TableCell className="text-sm" colSpan={2}>
+            <TableCell className="text-base" colSpan={2}>
               {abbreviateUom(ing.uom) || "—"}
             </TableCell>
-            <TableCell className="text-sm text-right">
+            <TableCell className="text-base text-right">
               {ing.cost != null ? `$${Number(ing.cost).toFixed(4)}` : "—"}
             </TableCell>
             <TableCell colSpan={hideCosts ? 0 : 3} />
