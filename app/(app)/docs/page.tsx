@@ -149,14 +149,11 @@ function SectionEditor({
 
 function SectionView({
   section,
-  index,
   onEdit,
 }: {
   section: Section;
-  index: number;
   onEdit: () => void;
 }) {
-  const isIntro = index === 0 && !section.heading;
   const markdown = section.heading
     ? `## ${section.heading}\n\n${section.body}`
     : section.body;
@@ -179,7 +176,7 @@ function SectionView({
             <path d="m15 5 4 4"/>
           </svg>
         </button>
-        <div className="prose prose-base dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:rounded-xl prose-code:before:content-none prose-code:after:content-none prose-thead:border-border prose-tr:border-border">
+        <div className="prose prose-base dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:rounded-xl prose-code:before:content-none prose-code:after:content-none prose-thead:border-border prose-tr:border-border prose-h2:mt-0 [&>*:last-child]:mb-0">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
@@ -204,9 +201,6 @@ function SectionView({
           </ReactMarkdown>
         </div>
       </div>
-
-      {/* Divider after non-intro sections */}
-      {!isIntro && section.heading && <hr className="mt-6 border-border" />}
     </div>
   );
 }
@@ -217,10 +211,11 @@ function SectionView({
 
 function AddSectionButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="flex justify-center py-2 group/add">
+    <div className="relative my-8 group/add">
+      <hr className="border-border" />
       <button
         onClick={onClick}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors opacity-0 group-hover/add:opacity-100 rounded-md border border-dashed border-transparent hover:border-border px-3 py-1.5"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground opacity-100 md:opacity-0 md:group-hover/add:opacity-100 transition-opacity rounded-md border border-dashed bg-background px-3 py-1"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
         Add section
@@ -590,7 +585,6 @@ export default function DocsPage() {
               ) : (
                 <SectionView
                   section={section}
-                  index={i}
                   onEdit={() => setEditingIndex(i)}
                 />
               )}
