@@ -239,36 +239,6 @@ function SettingsContent() {
               {process.env.NEXT_PUBLIC_SUPABASE_URL ? "Configured" : "Not configured"}
             </Badge>
           </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">QuickBooks Online</div>
-              <div className="text-sm text-muted-foreground">
-                Bookkeeping and journal entries (Phase 2)
-              </div>
-            </div>
-            <Badge variant="secondary">Phase 2</Badge>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">Sling</div>
-              <div className="text-sm text-muted-foreground">
-                Employee scheduling (Phase 3)
-              </div>
-            </div>
-            <Badge variant="secondary">Phase 3</Badge>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">Gemini AI</div>
-              <div className="text-sm text-muted-foreground">
-                AI-powered inventory analysis and chat
-              </div>
-            </div>
-            <Badge variant="default">Configured</Badge>
-          </div>
         </CardContent>
       </Card>
 
