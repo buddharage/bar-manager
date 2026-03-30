@@ -135,19 +135,6 @@
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* Print table wrapper — thead/tfoot repeat on every printed page */
-.print-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.print-table th,
-.print-table td {
-  padding: 0;
-  text-align: left;
-  vertical-align: top;
-}
-
 .print-header {
   display: flex;
   justify-content: space-between;

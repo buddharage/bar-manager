@@ -648,6 +648,17 @@ export function RecipeList({
         <Printer className="h-3.5 w-3.5" />
         Print
       </a>
+      {activeGroupName === "House Cocktails" && (
+        <a
+          href="/recipes/cheat"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          <Printer className="h-3.5 w-3.5" />
+          Cheat Sheet
+        </a>
+      )}
     </div>
   );
 

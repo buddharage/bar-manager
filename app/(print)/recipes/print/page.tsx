@@ -181,21 +181,10 @@ export default async function PrintRecipesPage({
 
   return (
     <div className="print-page bg-white text-black">
-      {/* Table wrapper — thead/tfoot repeat on every printed page */}
-      <table className="print-table">
-        <thead>
-          <tr>
-            <th>
-              <div className="print-header">
-                <span>Witching Hour</span>
-                <span>{categoryName}</span>
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
+      <div className="print-header">
+        <span>Witching Hour</span>
+        <span>{categoryName}</span>
+      </div>
       {/* Recipe cards */}
       <div className="print-recipes">
         {printRecipes.map((recipe) => {
@@ -301,10 +290,6 @@ export default async function PrintRecipesPage({
           );
         })}
       </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
     </div>
   );
 }
