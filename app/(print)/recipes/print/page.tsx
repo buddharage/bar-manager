@@ -2,7 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { Snowflake } from "lucide-react";
 import { NO_FULL_SPECS_GROUPS } from "@/lib/constants/recipe-groups";
 import { stripHtml } from "@/lib/utils";
-import { abbreviateUom } from "@/lib/units";
+import { abbreviateUom, convertUnits, unitCategory } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,17 @@ interface Recipe {
 
 /**
  * Given a cocktail recipe, resolve any prep-recipe ingredients into their
- * raw components so we can show a "from scratch" spec.
+ * raw components for a single drink, displayed in oz.
+ *
+ * For prep-recipe ingredients: compute each sub-ingredient's fraction of the
+ * batch total (all converted to oz), then multiply by the amount of that prep
+ * used in the cocktail. This guarantees the expanded amounts sum to the
+ * cocktail's stated quantity for that prep.
+ *
+ * Example: cocktail uses 2.5 oz of Batch X.
+ *   Batch X = 500ml A + 200ml B + 100ml C = ~27.05 oz total.
+ *   A fraction = 16.907/27.05 = 0.625 → 2.5 × 0.625 = 1.5625 oz
+ *   Sum of expanded = 2.5 oz ✓
  */
 function expandIngredients(
   recipe: Recipe,
@@ -54,19 +64,45 @@ function expandIngredients(
         (r) => r.xtrachef_guid === ing.reference_guid
       );
       if (prep && prep.recipe_ingredients.length > 0) {
-        const batchYield = prep.batch_size || 1;
-        const usedQty = ing.quantity || 0;
-        const scale = usedQty / batchYield;
+        const usedQty = ing.quantity || 0; // oz used in the cocktail
 
-        for (const sub of prep.recipe_ingredients) {
-          const scaledQty = (sub.quantity || 0) * scale;
-          expanded.push({
-            name: sub.name,
-            quantity: scaledQty ? formatQty(scaledQty) : "",
-            uom: abbreviateUom(sub.uom),
-            fromBatch: prep.name,
+        // Convert every sub-ingredient to oz to compute fractions
+        const subsInOz: { name: string; oz: number; isVolume: boolean }[] =
+          prep.recipe_ingredients.map((sub) => {
+            const qty = sub.quantity || 0;
+            if (sub.uom && unitCategory(sub.uom) === "volume") {
+              const converted = convertUnits(qty, sub.uom, "oz");
+              return { name: sub.name, oz: converted ?? 0, isVolume: true };
+            }
+            return { name: sub.name, oz: 0, isVolume: false };
           });
-        }
+
+        const totalOz = subsInOz.reduce((sum, s) => sum + s.oz, 0);
+
+        prep.recipe_ingredients.forEach((sub, i) => {
+          const info = subsInOz[i];
+          if (info.isVolume && totalOz > 0) {
+            const fraction = info.oz / totalOz;
+            const drinkOz = usedQty * fraction;
+            expanded.push({
+              name: sub.name,
+              quantity: drinkOz ? formatQty(drinkOz) : "",
+              uom: "oz",
+              fromBatch: prep.name,
+            });
+          } else {
+            // Non-volume ingredient (e.g. grams of sugar): scale by
+            // usedQty / batch_size as a fallback
+            const batchYield = prep.batch_size || 1;
+            const scaledQty = (sub.quantity || 0) * (usedQty / batchYield);
+            expanded.push({
+              name: sub.name,
+              quantity: scaledQty ? formatQty(scaledQty) : "",
+              uom: abbreviateUom(sub.uom),
+              fromBatch: prep.name,
+            });
+          }
+        });
       } else {
         expanded.push({
           name: ing.name,
@@ -75,11 +111,22 @@ function expandIngredients(
         });
       }
     } else {
-      expanded.push({
-        name: ing.name,
-        quantity: ing.quantity ? formatQty(ing.quantity) : "",
-        uom: abbreviateUom(ing.uom),
-      });
+      // Non-prep ingredient — already per-drink, just normalize UOM
+      const qty = ing.quantity || 0;
+      if (ing.uom && unitCategory(ing.uom) === "volume") {
+        const converted = convertUnits(qty, ing.uom, "oz");
+        expanded.push({
+          name: ing.name,
+          quantity: converted ? formatQty(converted) : "",
+          uom: "oz",
+        });
+      } else {
+        expanded.push({
+          name: ing.name,
+          quantity: qty ? formatQty(qty) : "",
+          uom: abbreviateUom(ing.uom),
+        });
+      }
     }
   }
 
@@ -203,7 +250,7 @@ export default async function PrintRecipesPage({
                   recipe.recipe_ingredients.some(
                     (i) => i.type === "Prep recipe"
                   ) && (
-                    <div className="recipe-section">
+                    <div className="recipe-section full-specs">
                       <h3 className="section-title">Full Specs (from scratch)</h3>
                       <table className="spec-table">
                         <tbody>
