@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -51,6 +51,44 @@ function VarianceBadge({ variance }: { variance: number }) {
     return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/10">+{formatCurrency(variance)}</Badge>;
   }
   return <Badge variant="destructive">{formatCurrency(variance)}</Badge>;
+}
+
+function TaxDueCard({ totalDue }: { totalDue: number }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    const raw = totalDue.toFixed(2);
+    navigator.clipboard.writeText(raw).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [totalDue]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">Tax Due</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="group flex items-center gap-2 text-2xl font-bold transition-colors hover:text-primary cursor-pointer"
+          title="Click to copy"
+        >
+          {formatCurrency(totalDue)}
+          {copied ? (
+            <span className="flex items-center gap-1 text-sm font-medium text-emerald-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              Copied!
+            </span>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-50 transition-opacity"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          )}
+        </button>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function SalesTaxPage() {
@@ -124,14 +162,7 @@ export default function SalesTaxPage() {
               <p className="text-2xl font-bold">{formatCurrency(summary.totalCollected)}</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Tax Due</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(summary.totalDue)}</p>
-            </CardContent>
-          </Card>
+          <TaxDueCard totalDue={summary.totalDue} />
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Variance</CardTitle>
